@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 from pydantic import BaseModel
-from app.database import get_connection
+from database import get_connection
 import uuid
 from datetime import datetime
 
