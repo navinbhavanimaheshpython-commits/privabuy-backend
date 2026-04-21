@@ -331,3 +331,60 @@ def settle_offer(offer_id: str, data: SettleOffer):
 
 from typing import Literal
 
+@router.get("/dealer/{dealer_id}/won")
+def get_dealer_won_vehicles(dealer_id: str):
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT o.id, o.car_id, o.offer_amount, o.created_at,
+                   c.year, c.make, c.model, c.mileage, c.condition,
+                   s.phone as seller_phone, s.email as seller_email
+            FROM offers o
+            JOIN cars c ON o.car_id = c.id
+            JOIN sellers s ON c.seller_id = s.id
+            WHERE o.dealer_id = %s AND o.status = 'accepted'
+            ORDER BY o.created_at DESC
+        """, (dealer_id,))
+        rows = cur.fetchall()
+        return [{"offer_id": str(r[0]), "car_id": str(r[1]), "amount": r[2],
+                 "won_at": str(r[3]), "year": r[4], "make": r[5], "model": r[6],
+                 "mileage": r[7], "condition": r[8],
+                 "seller_phone": r[9], "seller_email": r[10]} for r in rows]
+    finally:
+        cur.close()
+        conn.close()
+
+@router.get("/dealer/{dealer_id}/analytics")
+def get_dealer_analytics(dealer_id: str):
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        # Total auctions entered
+        cur.execute("""
+            SELECT COUNT(*) FROM offers WHERE dealer_id = %s
+        """, (dealer_id,))
+        total_entered = cur.fetchone()[0]
+
+        # Won
+        cur.execute("""
+            SELECT COUNT(*), COALESCE(SUM(offer_amount), 0)
+            FROM offers WHERE dealer_id = %s AND status = 'accepted'
+        """, (dealer_id,))
+        won_row = cur.fetchone()
+        total_won = won_row[0]
+        total_spend = won_row[1]
+
+        win_rate = round((total_won / total_entered * 100), 1) if total_entered > 0 else 0
+        avg_price = round(total_spend / total_won) if total_won > 0 else 0
+
+        return {
+            "total_entered": total_entered,
+            "total_won": total_won,
+            "total_spend": total_spend,
+            "win_rate": win_rate,
+            "avg_price_per_unit": avg_price
+        }
+    finally:
+        cur.close()
+        conn.close()
