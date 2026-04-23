@@ -388,3 +388,25 @@ def get_dealer_analytics(dealer_id: str):
     finally:
         cur.close()
         conn.close()
+
+
+
+
+@router.get("/car/{car_id}/top-bids")
+def get_top_bids(car_id: str):
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT o.id, o.dealer_id, o.offer_amount, o.created_at
+            FROM offers o
+            WHERE o.car_id = %s AND o.status = 'pending'
+            ORDER BY o.offer_amount DESC
+            LIMIT 10
+        """, (car_id,))
+        rows = cur.fetchall()
+        return [{"offer_id": str(r[0]), "dealer_id": str(r[1]), 
+                 "amount": r[2], "created_at": str(r[3])} for r in rows]
+    finally:
+        cur.close()
+        conn.close()
