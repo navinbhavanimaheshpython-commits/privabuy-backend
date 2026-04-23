@@ -109,3 +109,22 @@ def list_car(data: CarListing):
     finally:
         cur.close()
         conn.close()
+
+
+@router.get("/active")
+def get_active_cars():
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT id, seller_id, year, make, model, mileage, zip, condition, created_at
+            FROM cars WHERE status = 'open'
+            ORDER BY created_at DESC
+        """)
+        cars = cur.fetchall()
+        return [{"car_id": str(c[0]), "seller_id": str(c[1]), "year": c[2], "make": c[3], 
+                 "model": c[4], "mileage": c[5], "zip": c[6], "condition": c[7],
+                 "created_at": str(c[8])} for c in cars]
+    finally:
+        cur.close()
+        conn.close()
