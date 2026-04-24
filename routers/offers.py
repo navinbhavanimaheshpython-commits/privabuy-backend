@@ -410,3 +410,20 @@ def get_top_bids(car_id: str):
     finally:
         cur.close()
         conn.close()
+
+
+@router.post("/expire-old")
+def expire_old_listings():
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            UPDATE cars SET status = 'expired'
+            WHERE status = 'open'
+            AND created_at < NOW() - INTERVAL '30 days'
+        """)
+        conn.commit()
+        return {"expired": cur.rowcount}
+    finally:
+        cur.close()
+        conn.close()
