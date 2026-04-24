@@ -10,7 +10,7 @@ router = APIRouter(
     tags=["cars"]
 )
 
-class CarListing(BaseModel): 
+class CarListing(BaseModel):
     seller_id: str
     year: int
     make: str
@@ -20,96 +20,64 @@ class CarListing(BaseModel):
     condition: str
     seller_phone: str
     seller_email: str
-   
+    vin: str = ''
+    title_status: str = 'Clean'
+    loan_status: str = 'None'
+    trim: str = ''
+    color: str = ''
+    transmission: str = 'Automatic'
+    drivetrain: str = 'FWD'
+    keys: str = 'Yes'
+    accidents: str = 'None'
+    owners: int = 1
+    smoked_in: bool = False
+    overall_condition: str = ''
+    comments: str = ''
+    addons: str = ''
+
 @router.post("/list-car")
 def list_car(data: CarListing):
     conn = get_connection()
     cur = conn.cursor()
-
     try:
         car_id = str(uuid.uuid4())
-
-        # 1. Insert the car
         cur.execute("""
-            INSERT INTO cars (
-                   id, seller_id, year, make, model, mileage, zip,
-    condition, seller_phone, seller_email, created_at, status
-            )
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'open')
-        """, (
+            INSERT INTO cars (id, seller_id, year, make, model, mileage, zip,
+            condition, seller_phone, seller_email, created_at, status,
+            vin, title_status, loan_status, trim, color, transmission,
+            drivetrain, keys, accidents, owners, smoked_in, overall_condition,
+            comments, addons)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'open',
+            %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        """, (car_id, data.seller_id, data.year, data.make, data.model,
+              data.mileage, data.zip, data.condition, data.seller_phone,
+              data.seller_email, datetime.utcnow(),
+              data.vin, data.title_status, data.loan_status, data.trim,
+              data.color, data.transmission, data.drivetrain, data.keys,
+              data.accidents, data.owners, data.smoked_in,
+              data.overall_condition, data.comments, data.addons))
 
-            car_id,
-            data.seller_id,
-            data.year,
-            data.make,
-            data.model,
-            data.mileage,
-            data.zip,
-            data.condition,
-            data.seller_phone,
-            data.seller_email,
-            datetime.utcnow()
-        ))
-
-        # 2. Select up to 5 dealers
-        cur.execute("""
-            SELECT id
-            FROM dealers
-            ORDER BY created_at ASC
-            LIMIT 5
-        """)
+        cur.execute("SELECT id FROM dealers ORDER BY created_at ASC LIMIT 5")
         dealers = cur.fetchall()
-
-        # 3 connection event
         for d in dealers:
-            dealer_id =d[0]
-
+            dealer_id = d[0]
             cur.execute("""
-                INSERT INTO dealer_car_connections (
-                    id, car_id, dealer_id, created_at
-                )
+                INSERT INTO dealer_car_connections (id, car_id, dealer_id, created_at)
                 VALUES (%s,%s,%s,%s)
-            """, (
-                str(uuid.uuid4()),
-                car_id,
-                d[0],
-                datetime.utcnow()
-            ))
-
-
-            # 🔔 notification event
+            """, (str(uuid.uuid4()), car_id, dealer_id, datetime.utcnow()))
             cur.execute("""
-                    INSERT INTO dealer_notifications (
-                       id, dealer_id, car_id, type, created_at
-                 )
-                  VALUES (%s,%s,%s,%s,%s)
-              """, (
-                    str(uuid.uuid4()),
-                    dealer_id,
-                    car_id,
-                    "NEW_CAR_ASSIGNED",
-                   datetime.utcnow()
-             ))
-
-
-            
+                INSERT INTO dealer_notifications (id, dealer_id, car_id, type, created_at)
+                VALUES (%s,%s,%s,%s,%s)
+            """, (str(uuid.uuid4()), dealer_id, car_id, "NEW_CAR_ASSIGNED", datetime.utcnow()))
 
         conn.commit()
-
-        return {
-            "status": "ok",
-            "car_id": car_id,
-            "connected_dealers": len(dealers)
-        }
-
+        return {"status": "ok", "car_id": car_id, "connected_dealers": len(dealers)}
     except Exception as e:
         conn.rollback()
         raise e
-
     finally:
         cur.close()
         conn.close()
-
 
 @router.get("/active")
 def get_active_cars():
