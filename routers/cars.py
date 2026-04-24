@@ -128,3 +128,27 @@ def get_active_cars():
     finally:
         cur.close()
         conn.close()
+
+
+@router.get("/{car_id}")
+def get_car(car_id: str):
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT id, seller_id, year, make, model, mileage, zip, 
+                   condition, created_at, status
+            FROM cars WHERE id = %s
+        """, (car_id,))
+        c = cur.fetchone()
+        if not c:
+            raise HTTPException(status_code=404, detail="Car not found")
+        return {
+            "car_id": str(c[0]), "seller_id": str(c[1]),
+            "year": c[2], "make": c[3], "model": c[4],
+            "mileage": c[5], "zip": c[6], "condition": c[7],
+            "created_at": str(c[8]), "status": c[9]
+        }
+    finally:
+        cur.close()
+        conn.close()
