@@ -45,19 +45,22 @@ def list_car(data: CarListing):
         car_id = str(uuid.uuid4())
         cur.execute("""
             INSERT INTO cars (id, seller_id, year, make, model, mileage, zip,
-                condition, seller_phone, seller_email, created_at, status,
-                vin, title_status, loan_status, trim, color, transmission,
-                drivetrain, keys, accidents, owners, smoked_in, overall_condition,
-                comments, addons, photos)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'open',
-            %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-        """, (car_id, data.seller_id, data.year, data.make, data.model,
-              data.mileage, data.zip, data.condition, data.seller_phone,
-              data.seller_email, datetime.utcnow(),
-              data.vin, data.title_status, data.loan_status, data.trim,
-              data.color, data.transmission, data.drivetrain, data.keys,
-              data.accidents, data.owners, data.smoked_in,
-              data.overall_condition, data.comments, data.addons, json.dumps(data.photos)))
+            condition, seller_phone, seller_email, created_at, status,
+            vin, title_status, loan_status, trim, color, transmission,
+            drivetrain, keys, accidents, owners, smoked_in, overall_condition,
+            comments, addons, photos)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'open',
+            %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        """, (
+            car_id, data.seller_id, data.year, data.make, data.model,
+            data.mileage, data.zip, data.condition, data.seller_phone,
+            data.seller_email, datetime.utcnow(),
+            data.vin, data.title_status, data.loan_status, data.trim,
+            data.color, data.transmission, data.drivetrain, data.keys,
+            data.accidents, data.owners, data.smoked_in,
+            data.overall_condition, data.comments, data.addons,
+            json.dumps(data.photos)
+        ))
 
         cur.execute("SELECT id FROM dealers ORDER BY created_at ASC LIMIT 5")
         dealers = cur.fetchall()
@@ -80,7 +83,6 @@ def list_car(data: CarListing):
     finally:
         cur.close()
         conn.close()
-
 @router.get("/active")
 def get_active_cars():
     conn = get_connection()
