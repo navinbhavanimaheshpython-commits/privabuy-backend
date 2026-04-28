@@ -140,3 +140,50 @@ def get_car(car_id: str):
     finally:
         cur.close()
         conn.close()
+
+
+
+
+@router.get("/admin/overview")
+def admin_overview():
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT COUNT(*) FROM cars WHERE status = 'open'")
+        live = cur.fetchone()[0]
+        cur.execute("SELECT COUNT(*) FROM dealers WHERE status = 'approved'")
+        dealers = cur.fetchone()[0]
+        cur.execute("SELECT COUNT(*) FROM cars WHERE created_at > NOW() - INTERVAL '30 days'")
+        auctions_30d = cur.fetchone()[0]
+        try:
+            cur.execute("SELECT COALESCE(SUM(amount),0) FROM payments WHERE created_at > NOW() - INTERVAL '30 days'")
+            revenue_30d = float(cur.fetchone()[0])
+        except:
+            revenue_30d = 0.0
+        return {"live_auctions": live, "active_dealers": dealers, "auctions_30d": auctions_30d, "revenue_30d": revenue_30d}
+    finally:
+        cur.close()
+        conn.close()
+
+@router.get("/admin/listings")
+def admin_listings():
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT c.id, c.year, c.make, c.model, c.mileage, c.status, c.created_at,
+                   s.email as seller_email,
+                   (SELECT COUNT(*) FROM offers o WHERE o.car_id = c.id) as bid_count,
+                   (SELECT MAX(offer_amount) FROM offers o WHERE o.car_id = c.id) as top_bid
+            FROM cars c
+            LEFT JOIN sellers s ON c.seller_id = s.id
+            ORDER BY c.created_at DESC
+            LIMIT 50
+        """)
+        rows = cur.fetchall()
+        return [{"car_id": str(r[0]), "year": r[1], "make": r[2], "model": r[3],
+                 "mileage": r[4], "status": r[5], "created_at": str(r[6]),
+                 "seller_email": r[7], "bid_count": r[8], "top_bid": float(r[9]) if r[9] else 0} for r in rows]
+    finally:
+        cur.close()
+        conn.close()
