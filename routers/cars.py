@@ -108,18 +108,34 @@ def get_car(car_id: str):
     cur = conn.cursor()
     try:
         cur.execute("""
-            SELECT id, seller_id, year, make, model, mileage, zip, 
-                   condition, created_at, status
+            SELECT id, seller_id, year, make, model, mileage, zip,
+                   condition, created_at, status, vin, title_status,
+                   loan_status, trim, color, transmission, drivetrain,
+                   keys, accidents, owners, smoked_in, overall_condition,
+                   comments, addons, photos
             FROM cars WHERE id = %s
         """, (car_id,))
         c = cur.fetchone()
         if not c:
             raise HTTPException(status_code=404, detail="Car not found")
+        photos = c[24]
+        if isinstance(photos, str):
+            import json
+            try: photos = json.loads(photos)
+            except: photos = []
         return {
             "car_id": str(c[0]), "seller_id": str(c[1]),
             "year": c[2], "make": c[3], "model": c[4],
             "mileage": c[5], "zip": c[6], "condition": c[7],
-            "created_at": str(c[8]), "status": c[9]
+            "created_at": str(c[8]), "status": c[9],
+            "vin": c[10] or '', "title_status": c[11] or 'Clean',
+            "loan_status": c[12] or 'None', "trim": c[13] or '',
+            "color": c[14] or '', "transmission": c[15] or '',
+            "drivetrain": c[16] or '', "keys": c[17] or '',
+            "accidents": c[18] or 'None', "owners": c[19] or 1,
+            "smoked_in": c[20] or False, "overall_condition": c[21] or '',
+            "comments": c[22] or '', "addons": c[23] or '',
+            "photos": photos or []
         }
     finally:
         cur.close()
