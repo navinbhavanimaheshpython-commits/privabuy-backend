@@ -90,3 +90,47 @@ def get_notifications(dealer_id: str):
     finally:
         cur.close()
         conn.close()
+
+
+
+
+@router.get("/admin/all")
+def admin_all_dealers():
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT id, dealer_name, email, license_number, city, state, status, created_at
+            FROM dealers ORDER BY created_at DESC
+        """)
+        rows = cur.fetchall()
+        return [{"dealer_id": str(r[0]), "dealer_name": r[1], "email": r[2],
+                 "license_number": r[3], "city": r[4], "state": r[5],
+                 "status": r[6], "created_at": str(r[7])} for r in rows]
+    finally:
+        cur.close()
+        conn.close()
+
+@router.post("/{dealer_id}/approve")
+def approve_dealer(dealer_id: str):
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("UPDATE dealers SET status = 'approved' WHERE id = %s", (dealer_id,))
+        conn.commit()
+        return {"status": "ok"}
+    finally:
+        cur.close()
+        conn.close()
+
+@router.post("/{dealer_id}/reject")
+def reject_dealer(dealer_id: str):
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("UPDATE dealers SET status = 'rejected' WHERE id = %s", (dealer_id,))
+        conn.commit()
+        return {"status": "ok"}
+    finally:
+        cur.close()
+        conn.close()
