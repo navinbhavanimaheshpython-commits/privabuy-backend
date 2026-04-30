@@ -134,3 +134,21 @@ def reject_dealer(dealer_id: str):
     finally:
         cur.close()
         conn.close()
+
+
+
+class LicenseCheck(BaseModel):
+    license_number: str
+
+@router.post("/check-license")
+def check_license(data: LicenseCheck):
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT id FROM dealers WHERE license_number = %s", (data.license_number,))
+        if cur.fetchone():
+            raise HTTPException(status_code=409, detail="License already registered")
+        return {"status": "available"}
+    finally:
+        cur.close()
+        conn.close()
