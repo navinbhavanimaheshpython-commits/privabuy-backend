@@ -84,7 +84,7 @@ def list_car(data: CarListing):
         cur.close()
         conn.close()
 
-        
+
 @router.get("/active")
 def get_active_cars():
     conn = get_connection()
@@ -115,9 +115,9 @@ async def get_market_value(year: int, make: str, model: str, mileage: int):
                     "year": year,
                     "make": make.lower(),
                     "model": model.lower(),
-                    "miles_range": f"{max(0,mileage-20000)}-{mileage+20000}",
                     "rows": 10,
-                    "start": 0
+                    "start": 0,
+                    "country": "US"
                 }
             )
             data = res.json()
@@ -139,9 +139,6 @@ async def get_market_value(year: int, make: str, model: str, mileage: int):
             }
     except Exception as e:
         return {"found": False, "error": str(e)}
-
-
-
 
 
 @router.get("/admin/overview")
