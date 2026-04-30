@@ -24,3 +24,15 @@ app.include_router(payments.router)
 @app.get("/")
 def home():
     return {"message": "AutoOS API running"}
+
+
+from fastapi import Header, HTTPException
+
+ADMIN_PASSWORD = "Hanuman@1015"  # Change this
+ADMIN_EMAIL = "navinbhavanimaheshpython@gmail.com"
+
+@app.post("/admin/login")
+def admin_login(data: dict):
+    if data.get("email") != ADMIN_EMAIL or data.get("password") != ADMIN_PASSWORD:
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    return {"status": "ok", "token": "pb-admin-2026"}
