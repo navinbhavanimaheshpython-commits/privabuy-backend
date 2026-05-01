@@ -1,43 +1,69 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 import uuid
 from datetime import datetime
 from database import get_connection
+import hashlib
 
+router = APIRouter(prefix="/sellers", tags=["sellers"])
 
-router = APIRouter(
-    prefix="/sellers",
-    tags=["sellers"]
-)
-
+def hash_password(password: str) -> str:
+    return hashlib.sha256(password.encode()).hexdigest()
 
 class SellerCreate(BaseModel):
     phone: str
     email: str
+    password: str
+    name: str = ''
+
+class SellerLogin(BaseModel):
+    email: str
+    password: str
 
 @router.post("/register")
 def register_seller(data: SellerCreate):
     conn = get_connection()
     cur = conn.cursor()
+    try:
+        cur.execute("SELECT id FROM sellers WHERE email = %s", (data.email,))
+        existing = cur.fetchone()
+        if existing:
+            raise HTTPException(status_code=409, detail="Email already registered. Please log in instead.")
+        seller_id = str(uuid.uuid4())
+        cur.execute("""
+            INSERT INTO sellers (id, phone, email, password, name, created_at)
+            VALUES (%s, %s, %s, %s, %s, %s)
+        """, (seller_id, data.phone, data.email, hash_password(data.password), data.name, datetime.utcnow()))
+        conn.commit()
+        return {"seller_id": seller_id, "name": data.name, "email": data.email}
+    except HTTPException:
+        raise
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cur.close()
+        conn.close()
 
-    seller_id = str(uuid.uuid4())
-
-    cur.execute("""
-        INSERT INTO sellers (id, phone, email, created_at)
-        VALUES (%s, %s, %s, %s)
-    """, (
-        seller_id,
-        data.phone,
-        data.email,
-        datetime.utcnow()
-    ))
-
-    conn.commit()
-    cur.close()
-    conn.close()
-
-    return {"seller_id": seller_id}
-
+@router.post("/login")
+def login_seller(data: SellerLogin):
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT id, name, password FROM sellers WHERE email = %s", (data.email,))
+        seller = cur.fetchone()
+        if not seller:
+            raise HTTPException(status_code=404, detail="No account found with that email. Please register first.")
+        seller_id, name, stored_password = seller
+        if stored_password and stored_password != hash_password(data.password):
+            raise HTTPException(status_code=401, detail="Incorrect password.")
+        if not stored_password:
+            cur.execute("UPDATE sellers SET password = %s WHERE id = %s", (hash_password(data.password), seller_id))
+            conn.commit()
+        return {"seller_id": str(seller_id), "name": name or data.email, "email": data.email}
+    finally:
+        cur.close()
+        conn.close()
 
 @router.get("/{seller_id}/listings")
 def get_seller_listings(seller_id: str):
