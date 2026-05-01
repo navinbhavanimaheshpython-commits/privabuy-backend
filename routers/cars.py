@@ -108,30 +108,18 @@ async def get_market_value(year: int, make: str, model: str, mileage: int):
     import httpx
     try:
         async with httpx.AsyncClient(timeout=8.0) as client:
-            # Get OAuth token first
-            token_res = await client.post(
-                "https://mc-api.marketcheck.com/v2/oauth/token",
-                data={
-                    "grant_type": "client_credentials",
-                    "client_id": "odVSXlZhE7ioMdmA4HjBuVpLxttlY2JR",
-                    "client_secret": "OUOmq77WQH8OTcgt"
-                }
-            )
-            token_data = token_res.json()
-            token = token_data.get("access_token")
-            if not token:
-                return {"found": False, "error": "auth failed", "raw": token_data}
-
-            # Search with token
             res = await client.get(
                 "https://mc-api.marketcheck.com/v2/search/car/active",
-                headers={"Authorization": f"Bearer {token}"},
                 params={
+                    "api_key": "odVSXlZhE7ioMdmA4HjBuVpLxttlY2JR",
                     "year": year,
                     "make": make.lower(),
                     "model": model.lower(),
                     "rows": 10,
                     "start": 0
+                },
+                headers={
+                    "X-Api-Key": "odVSXlZhE7ioMdmA4HjBuVpLxttlY2JR"
                 }
             )
             data = res.json()
