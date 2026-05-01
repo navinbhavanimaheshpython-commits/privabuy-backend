@@ -104,7 +104,7 @@ def get_active_cars():
         conn.close()
 
 @router.get("/market-value")
-async def get_market_value(year: int, make: str, model: str, mileage: int):
+async def get_market_value(year: int, make: str, model: str, mileage: int, zip: str = "60601"):
     import httpx
     try:
         async with httpx.AsyncClient(timeout=8.0) as client:
@@ -115,18 +115,31 @@ async def get_market_value(year: int, make: str, model: str, mileage: int):
                     "year": year,
                     "make": make.lower(),
                     "model": model.lower(),
+                    "zip": zip,
+                    "radius": 100,
                     "rows": 10,
                     "start": 0
-                },
-                headers={
-                    "X-Api-Key": "odVSXlZhE7ioMdmA4HjBuVpLxttlY2JR"
                 }
             )
             data = res.json()
-            return {"raw": data, "status": res.status_code}
+            listings = data.get("listings", [])
+            if not listings:
+                return {"found": False, "avg_price": 0, "count": 0, "debug": data}
+            prices = [l.get("price", 0) for l in listings if l.get("price", 0) > 1000]
+            if not prices:
+                return {"found": False, "avg_price": 0, "count": 0}
+            avg = int(sum(prices) / len(prices))
+            trade_in = int(avg * 0.82)
+            return {
+                "found": True,
+                "avg_price": avg,
+                "trade_in": trade_in,
+                "count": len(prices),
+                "min_price": min(prices),
+                "max_price": max(prices)
+            }
     except Exception as e:
         return {"error": str(e)}
-
 
 @router.get("/admin/overview")
 def admin_overview():
