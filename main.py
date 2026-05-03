@@ -1,6 +1,6 @@
 from dotenv import load_dotenv
 load_dotenv()
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from routers import cars, dealers, offers, sellers, payments
 
@@ -10,7 +10,12 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://privabuy.vercel.app", "http://localhost:5173", "*"],
+    allow_origins=[
+        "https://privabuy.com",
+        "https://www.privabuy.com",      
+        "https://privabuy.vercel.app",
+        "http://localhost:5173",
+    ],
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
