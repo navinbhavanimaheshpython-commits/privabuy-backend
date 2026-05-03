@@ -3,6 +3,7 @@ from pydantic import BaseModel
 from database import get_connection
 import uuid
 from datetime import datetime
+from email_utils import send_admin_new_dealer
 
 router = APIRouter(prefix="/dealers", tags=["dealers"])
 
@@ -35,6 +36,11 @@ def dealer_register(data: DealerRegister):
         """, (dealer_id, data.dealer_name, data.contact_name, data.phone,
               data.email, data.license_number, data.city, data.state, api_key, datetime.utcnow()))
         conn.commit()
+        send_admin_new_dealer(
+            data.dealer_name, data.contact_name,
+            data.email, data.license_number,
+            data.city, data.state
+        )
         return {"status": "ok", "dealer_id": dealer_id, "api_key": api_key}
     except HTTPException:
         raise
