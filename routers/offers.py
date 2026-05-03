@@ -5,7 +5,7 @@ import uuid
 from datetime import datetime
 import psycopg2
 from typing import Literal
-from email import send_seller_new_bid
+from email_utils import send_seller_new_bid
 
 router = APIRouter(
     prefix="/offers",

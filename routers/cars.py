@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from database import get_connection
 import json
-from email import send_dealer_new_listing
+from email_utils import send_dealer_new_listing
 
 
 router = APIRouter(
