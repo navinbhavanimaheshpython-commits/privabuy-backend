@@ -5,7 +5,7 @@ import uuid
 from datetime import datetime
 import psycopg2
 from typing import Literal
-
+from email import send_seller_new_bid
 
 router = APIRouter(
     prefix="/offers",
@@ -48,7 +48,6 @@ def submit_offer(data: Offer):
                 status_code=409,
                 detail="Car is no longer accepting offers"
             )
-            
 
         # 3️⃣ Insert offer
         offer_id = str(uuid.uuid4())
@@ -66,6 +65,20 @@ def submit_offer(data: Offer):
             datetime.utcnow()
         ))
 
+        # 4️⃣ Email seller about new bid
+        cur.execute("""
+            SELECT s.email, c.year, c.make, c.model
+            FROM cars c JOIN sellers s ON c.seller_id = s.id
+            WHERE c.id = %s
+        """, (data.car_id,))
+        car_info = cur.fetchone()
+        if car_info:
+            send_seller_new_bid(
+                car_info[0], 'A dealer',
+                data.offer_amount,
+                car_info[1], car_info[2], car_info[3]
+            )
+
         conn.commit()
         return {"status": "ok", "offer_id": offer_id}
 
@@ -75,7 +88,7 @@ def submit_offer(data: Offer):
             status_code=409,
             detail="Offer already submitted for this car"
         )
-    
+
     except psycopg2.Error as e:
         conn.rollback()
         raise HTTPException(
@@ -86,7 +99,6 @@ def submit_offer(data: Offer):
     finally:
         cur.close()
         conn.close()
-        
 
 @router.get("/car/{car_id}/offers")
 def list_offers(car_id: str):

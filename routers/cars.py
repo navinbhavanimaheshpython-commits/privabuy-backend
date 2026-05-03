@@ -4,6 +4,7 @@ import uuid
 from datetime import datetime
 from database import get_connection
 import json
+from email import send_dealer_new_listing
 
 
 router = APIRouter(
@@ -74,6 +75,14 @@ def list_car(data: CarListing):
                 INSERT INTO dealer_notifications (id, dealer_id, car_id, type, created_at)
                 VALUES (%s,%s,%s,%s,%s)
             """, (str(uuid.uuid4()), dealer_id, car_id, "NEW_CAR_ASSIGNED", datetime.utcnow()))
+            cur.execute("SELECT email, dealer_name FROM dealers WHERE id = %s", (dealer_id,))
+            dealer_info = cur.fetchone()
+            if dealer_info:
+                send_dealer_new_listing(
+                    dealer_info[0], dealer_info[1],
+                    data.year, data.make, data.model,
+                    data.mileage, data.zip, car_id
+                )
 
         conn.commit()
         return {"status": "ok", "car_id": car_id, "connected_dealers": len(dealers)}
@@ -82,8 +91,7 @@ def list_car(data: CarListing):
         raise e
     finally:
         cur.close()
-        conn.close()
-
+        conn.close()    
 
 @router.get("/active")
 def get_active_cars():
