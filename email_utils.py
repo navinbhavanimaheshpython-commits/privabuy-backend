@@ -59,3 +59,61 @@ def send_seller_new_bid(seller_email: str, dealer_label: str, amount: int, year:
         })
     except Exception as e:
         print(f"Email error: {e}")
+
+
+
+def send_admin_new_dealer(dealer_name: str, contact_name: str, email: str, license: str, city: str, state: str):
+    try:
+        resend.Emails.send({
+            "from": "PrivaBuy <notifications@privabuy.com>",
+            "to": "navinbhavanimaheshpython@gmail.com",
+            "subject": f"New Dealer Registration: {dealer_name}",
+            "html": f"""
+            <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#f5f5f5;padding:20px;">
+              <div style="background:#080808;padding:24px;border-radius:12px;margin-bottom:20px;">
+                <h1 style="color:#c9b8ff;font-size:24px;margin:0;">PrivaBuy Admin</h1>
+                <p style="color:rgba(255,255,255,0.5);margin:4px 0 0;">New Dealer Registration</p>
+              </div>
+              <div style="background:white;padding:24px;border-radius:12px;">
+                <h2 style="color:#1a1a1a;margin:0 0 16px;">New Dealer Registered</h2>
+                <table style="width:100%;border-collapse:collapse;">
+                  <tr><td style="padding:8px 0;color:#666;width:140px;">Dealership</td><td style="padding:8px 0;font-weight:600;">{dealer_name}</td></tr>
+                  <tr><td style="padding:8px 0;color:#666;">Contact</td><td style="padding:8px 0;">{contact_name}</td></tr>
+                  <tr><td style="padding:8px 0;color:#666;">Email</td><td style="padding:8px 0;">{email}</td></tr>
+                  <tr><td style="padding:8px 0;color:#666;">License</td><td style="padding:8px 0;font-family:monospace;">{license}</td></tr>
+                  <tr><td style="padding:8px 0;color:#666;">Location</td><td style="padding:8px 0;">{city}, {state}</td></tr>
+                </table>
+                <a href="https://privabuy.com/app?role=admin" style="display:inline-block;background:#c9b8ff;color:#080808;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;margin-top:20px;">Review in Admin Panel →</a>
+              </div>
+            </div>
+            """
+        })
+    except Exception as e:
+        print(f"Admin email error: {e}")
+
+def send_admin_new_seller(name: str, email: str, phone: str):
+    try:
+        resend.Emails.send({
+            "from": "PrivaBuy <notifications@privabuy.com>",
+            "to": "navinbhavanimaheshpython@gmail.com",
+            "subject": f"New Seller Registration: {email}",
+            "html": f"""
+            <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#f5f5f5;padding:20px;">
+              <div style="background:#080808;padding:24px;border-radius:12px;margin-bottom:20px;">
+                <h1 style="color:#c9b8ff;font-size:24px;margin:0;">PrivaBuy Admin</h1>
+                <p style="color:rgba(255,255,255,0.5);margin:4px 0 0;">New Seller Registration</p>
+              </div>
+              <div style="background:white;padding:24px;border-radius:12px;">
+                <h2 style="color:#1a1a1a;margin:0 0 16px;">New Seller Registered</h2>
+                <table style="width:100%;border-collapse:collapse;">
+                  <tr><td style="padding:8px 0;color:#666;width:140px;">Name</td><td style="padding:8px 0;font-weight:600;">{name}</td></tr>
+                  <tr><td style="padding:8px 0;color:#666;">Email</td><td style="padding:8px 0;">{email}</td></tr>
+                  <tr><td style="padding:8px 0;color:#666;">Phone</td><td style="padding:8px 0;">{phone}</td></tr>
+                </table>
+                <a href="https://privabuy.com/app?role=admin" style="display:inline-block;background:#c9b8ff;color:#080808;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;margin-top:20px;">View in Admin Panel →</a>
+              </div>
+            </div>
+            """
+        })
+    except Exception as e:
+        print(f"Admin email error: {e}")
