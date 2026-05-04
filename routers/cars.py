@@ -137,7 +137,7 @@ async def get_market_value(year: int, make: str, model: str, mileage: int, zip: 
             if not prices:
                 return {"found": False, "avg_price": 0, "count": 0}
             avg = int(sum(prices) / len(prices))
-            trade_in = int(avg * 0.82)
+            trade_in = int(min(prices) * 0.92)
             return {
                 "found": True,
                 "avg_price": avg,
