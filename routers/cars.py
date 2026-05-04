@@ -119,7 +119,7 @@ async def get_market_value(year: int, make: str, model: str, mileage: int, zip: 
             res = await client.get(
                 "https://mc-api.marketcheck.com/v2/search/car/active",
                 params={
-                    "api_key": "odVSXlZhE7ioMdmA4HjBuVpLxttlY2JR",
+                    "api_key": "DsZpzkPNuZC43EUkD64TJno2YHVm3zSe",
                     "year": year,
                     "make": make.lower(),
                     "model": model.lower(),
@@ -132,7 +132,7 @@ async def get_market_value(year: int, make: str, model: str, mileage: int, zip: 
             data = res.json()
             listings = data.get("listings", [])
             if not listings:
-                return {"found": False, "avg_price": 0, "count": 0, "debug": data}
+                return {"found": False, "avg_price": 0, "count": 0}
             prices = [l.get("price", 0) for l in listings if l.get("price", 0) > 1000]
             if not prices:
                 return {"found": False, "avg_price": 0, "count": 0}
@@ -147,7 +147,7 @@ async def get_market_value(year: int, make: str, model: str, mileage: int, zip: 
                 "max_price": max(prices)
             }
     except Exception as e:
-        return {"error": str(e)}
+        return {"found": False, "error": str(e)}
 
 @router.get("/admin/overview")
 def admin_overview():
