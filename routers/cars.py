@@ -117,6 +117,30 @@ async def get_market_value(year: int, make: str, model: str, mileage: int, zip: 
     try:
         async with httpx.AsyncClient(timeout=8.0) as client:
             res = await client.get(
+                "https://mc-api.marketcheck.com/v2/mds/car",
+                params={
+                    "api_key": "DsZpzkPNuZC43EUkD64TJno2YHVm3zSe",
+                    "year": year,
+                    "make": make,
+                    "model": model,
+                    "miles": mileage,
+                    "zip": zip
+                }
+            )
+            data = res.json()
+            trade_in = data.get("trade_in", {})
+            retail = data.get("retail", {})
+            if trade_in.get("mean"):
+                return {
+                    "found": True,
+                    "avg_price": int(retail.get("mean", 0)),
+                    "trade_in": int(trade_in.get("mean", 0)),
+                    "count": data.get("samples", 0),
+                    "min_price": int(trade_in.get("below", 0)),
+                    "max_price": int(trade_in.get("above", 0))
+                }
+            # Fallback to search if MDS not available
+            res2 = await client.get(
                 "https://mc-api.marketcheck.com/v2/search/car/active",
                 params={
                     "api_key": "DsZpzkPNuZC43EUkD64TJno2YHVm3zSe",
@@ -129,21 +153,21 @@ async def get_market_value(year: int, make: str, model: str, mileage: int, zip: 
                     "start": 0
                 }
             )
-            data = res.json()
-            listings = data.get("listings", [])
+            data2 = res2.json()
+            listings = data2.get("listings", [])
             if not listings:
                 return {"found": False, "avg_price": 0, "count": 0}
             prices = [l.get("price", 0) for l in listings if l.get("price", 0) > 1000]
             if not prices:
                 return {"found": False, "avg_price": 0, "count": 0}
+            avg = int(sum(prices) / len(prices))
             min_price = min(prices)
             max_price = max(prices)
-            avg = int(sum(prices) / len(prices))
-            trade_in = int(min_price * 0.88)
+            trade_in_est = int(min_price * 0.91)
             return {
                 "found": True,
                 "avg_price": avg,
-                "trade_in": trade_in,
+                "trade_in": trade_in_est,
                 "count": len(prices),
                 "min_price": min_price,
                 "max_price": max_price
