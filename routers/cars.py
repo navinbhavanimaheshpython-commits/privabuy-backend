@@ -136,8 +136,10 @@ async def get_market_value(year: int, make: str, model: str, mileage: int, zip: 
             prices = [l.get("price", 0) for l in listings if l.get("price", 0) > 1000]
             if not prices:
                 return {"found": False, "avg_price": 0, "count": 0}
+            min_price = min(prices)
+            max_price = max(prices)
             avg = int(sum(prices) / len(prices))
-            trade_in = int(min(prices) * 0.92)
+            trade_in = int(min_price * 0.82)
             return {
                 "found": True,
                 "avg_price": avg,
