@@ -139,14 +139,14 @@ async def get_market_value(year: int, make: str, model: str, mileage: int, zip: 
             min_price = min(prices)
             max_price = max(prices)
             avg = int(sum(prices) / len(prices))
-            trade_in = int(min_price * 0.82)
+            trade_in = int(min_price * 0.88)
             return {
                 "found": True,
                 "avg_price": avg,
                 "trade_in": trade_in,
                 "count": len(prices),
-                "min_price": min(prices),
-                "max_price": max(prices)
+                "min_price": min_price,
+                "max_price": max_price
             }
     except Exception as e:
         return {"found": False, "error": str(e)}
