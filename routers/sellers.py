@@ -4,6 +4,7 @@ import uuid
 from datetime import datetime
 from database import get_connection
 import hashlib
+from email_utils import send_admin_new_seller
 
 router = APIRouter(prefix="/sellers", tags=["sellers"])
 
@@ -35,6 +36,7 @@ def register_seller(data: SellerCreate):
             VALUES (%s, %s, %s, %s, %s, %s)
         """, (seller_id, data.phone, data.email, hash_password(data.password), data.name, datetime.utcnow()))
         conn.commit()
+        send_admin_new_seller(data.name, data.email, data.phone)
         return {"seller_id": seller_id, "name": data.name, "email": data.email}
     except HTTPException:
         raise
@@ -44,7 +46,7 @@ def register_seller(data: SellerCreate):
     finally:
         cur.close()
         conn.close()
-
+    
 @router.post("/login")
 def login_seller(data: SellerLogin):
     conn = get_connection()
@@ -84,6 +86,62 @@ def get_seller_listings(seller_id: str):
                  "mileage": r[4], "status": r[5], "created_at": str(r[6]),
                  "floor_price": float(r[7]) if r[7] else 0,
                  "bid_count": r[8], "top_bid": float(r[9]) if r[9] else 0} for r in rows]
+    finally:
+        cur.close()
+        conn.close()
+
+
+
+        import secrets
+from datetime import timedelta
+
+class ForgotPassword(BaseModel):
+    email: str
+
+class ResetPassword(BaseModel):
+    token: str
+    password: str
+
+@router.post("/forgot-password")
+def forgot_password(data: ForgotPassword):
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT id, name FROM sellers WHERE email = %s", (data.email,))
+        seller = cur.fetchone()
+        if not seller:
+            return {"status": "ok"}  # Don't reveal if email exists
+        token = secrets.token_urlsafe(32)
+        expires = datetime.utcnow() + timedelta(hours=1)
+        cur.execute("UPDATE sellers SET reset_token = %s, reset_token_expires = %s WHERE id = %s",
+                    (token, expires, seller[0]))
+        conn.commit()
+        # Send reset email
+        from email_utils import send_password_reset
+        send_password_reset(data.email, seller[1] or data.email, token)
+        return {"status": "ok"}
+    finally:
+        cur.close()
+        conn.close()
+
+@router.post("/reset-password")
+def reset_password(data: ResetPassword):
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT id FROM sellers 
+            WHERE reset_token = %s AND reset_token_expires > NOW()
+        """, (data.token,))
+        seller = cur.fetchone()
+        if not seller:
+            raise HTTPException(status_code=400, detail="Invalid or expired reset link.")
+        cur.execute("""
+            UPDATE sellers SET password = %s, reset_token = NULL, reset_token_expires = NULL
+            WHERE id = %s
+        """, (hash_password(data.password), seller[0]))
+        conn.commit()
+        return {"status": "ok"}
     finally:
         cur.close()
         conn.close()

@@ -116,4 +116,32 @@ def send_admin_new_seller(name: str, email: str, phone: str):
             """
         })
     except Exception as e:
-        print(f"Admin email error: {e}")
+        print(f"Admin email error: {e}")    
+
+
+
+def send_password_reset(email: str, name: str, token: str):
+    try:
+        reset_url = f"https://privabuy.com/reset-password?token={token}"
+        resend.Emails.send({
+            "from": "PrivaBuy <notifications@privabuy.com>",
+            "to": email,
+            "subject": "Reset Your PrivaBuy Password",
+            "html": f"""
+            <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#f5f5f5;padding:20px;">
+              <div style="background:#080808;padding:24px;border-radius:12px;margin-bottom:20px;">
+                <h1 style="color:#c9b8ff;font-size:24px;margin:0;">PrivaBuy</h1>
+                <p style="color:rgba(255,255,255,0.5);margin:4px 0 0;">Password Reset</p>
+              </div>
+              <div style="background:white;padding:24px;border-radius:12px;">
+                <h2 style="color:#1a1a1a;margin:0 0 16px;">Reset Your Password</h2>
+                <p style="color:#444;">Hi {name},</p>
+                <p style="color:#444;">We received a request to reset your PrivaBuy password. Click the button below to choose a new one. This link expires in 1 hour.</p>
+                <a href="{reset_url}" style="display:inline-block;background:#c9b8ff;color:#080808;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;margin:16px 0;">Reset Password →</a>
+                <p style="color:#999;font-size:12px;margin-top:24px;">If you didn't request this, ignore this email. Your password won't change.</p>
+              </div>
+            </div>
+            """
+        })
+    except Exception as e:
+        print(f"Reset email error: {e}")
