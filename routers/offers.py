@@ -373,9 +373,7 @@ def get_dealer_analytics(dealer_id: str):
     cur = conn.cursor()
     try:
         # Total auctions entered
-        cur.execute("""
-            SELECT COUNT(*) FROM offers WHERE dealer_id = %s
-        """, (dealer_id,))
+        cur.execute("SELECT COUNT(*) FROM offers WHERE dealer_id = %s", (dealer_id,))
         total_entered = cur.fetchone()[0]
 
         # Won
@@ -385,17 +383,80 @@ def get_dealer_analytics(dealer_id: str):
         """, (dealer_id,))
         won_row = cur.fetchone()
         total_won = won_row[0]
-        total_spend = won_row[1]
+        total_spend = float(won_row[1])
 
         win_rate = round((total_won / total_entered * 100), 1) if total_entered > 0 else 0
         avg_price = round(total_spend / total_won) if total_won > 0 else 0
+
+        # Bids per day last 30 days
+        cur.execute("""
+            SELECT DATE(created_at) as day, COUNT(*) as bids
+            FROM offers WHERE dealer_id = %s
+            AND created_at > NOW() - INTERVAL '30 days'
+            GROUP BY day ORDER BY day ASC
+        """, (dealer_id,))
+        bids_by_day = [{"date": str(r[0]), "bids": r[1]} for r in cur.fetchall()]
+
+        # Top makes won
+        cur.execute("""
+            SELECT c.make, COUNT(*) as count
+            FROM offers o JOIN cars c ON o.car_id = c.id
+            WHERE o.dealer_id = %s AND o.status = 'accepted'
+            GROUP BY c.make ORDER BY count DESC LIMIT 5
+        """, (dealer_id,))
+        top_makes = [{"make": r[0], "count": r[1]} for r in cur.fetchall()]
+
+        # Avg bid vs winning bid on lost auctions
+        cur.execute("""
+            SELECT 
+                AVG(o.offer_amount) as my_avg,
+                AVG(winning.max_bid) as avg_winner
+            FROM offers o
+            JOIN (
+                SELECT car_id, MAX(offer_amount) as max_bid
+                FROM offers GROUP BY car_id
+            ) winning ON o.car_id = winning.car_id
+            WHERE o.dealer_id = %s AND o.status != 'accepted'
+        """, (dealer_id,))
+        bid_comp = cur.fetchone()
+        my_avg_bid = round(float(bid_comp[0])) if bid_comp and bid_comp[0] else 0
+        avg_winning_bid = round(float(bid_comp[1])) if bid_comp and bid_comp[1] else 0
+
+        # Recent won vehicles
+        cur.execute("""
+            SELECT c.year, c.make, c.model, c.mileage, o.offer_amount, o.created_at
+            FROM offers o JOIN cars c ON o.car_id = c.id
+            WHERE o.dealer_id = %s AND o.status = 'accepted'
+            ORDER BY o.created_at DESC LIMIT 5
+        """, (dealer_id,))
+        recent_won = [{"year": r[0], "make": r[1], "model": r[2], 
+                       "mileage": r[3], "amount": float(r[4]), 
+                       "date": str(r[5])} for r in cur.fetchall()]
+
+        # This month vs last month spend
+        cur.execute("""
+            SELECT 
+                COALESCE(SUM(CASE WHEN created_at > DATE_TRUNC('month', NOW()) THEN offer_amount ELSE 0 END), 0) as this_month,
+                COALESCE(SUM(CASE WHEN created_at BETWEEN DATE_TRUNC('month', NOW()) - INTERVAL '1 month' AND DATE_TRUNC('month', NOW()) THEN offer_amount ELSE 0 END), 0) as last_month
+            FROM offers WHERE dealer_id = %s AND status = 'accepted'
+        """, (dealer_id,))
+        months = cur.fetchone()
+        this_month = float(months[0]) if months else 0
+        last_month = float(months[1]) if months else 0
 
         return {
             "total_entered": total_entered,
             "total_won": total_won,
             "total_spend": total_spend,
             "win_rate": win_rate,
-            "avg_price_per_unit": avg_price
+            "avg_price": avg_price,
+            "bids_by_day": bids_by_day,
+            "top_makes": top_makes,
+            "my_avg_bid": my_avg_bid,
+            "avg_winning_bid": avg_winning_bid,
+            "recent_won": recent_won,
+            "this_month_spend": this_month,
+            "last_month_spend": last_month
         }
     finally:
         cur.close()
