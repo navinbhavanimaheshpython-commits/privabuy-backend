@@ -2,7 +2,7 @@ from dotenv import load_dotenv
 load_dotenv()
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from routers import cars, dealers, offers, sellers, payments
+from routers import cars, dealers, offers, sellers, payments, transactions
 
 
 
@@ -26,6 +26,7 @@ app.include_router(dealers.router)
 app.include_router(offers.router)
 app.include_router(sellers.router)
 app.include_router(payments.router)
+app.include_router(transactions.router)
 @app.get("/")
 def home():
     return {"message": "AutoOS API running"}

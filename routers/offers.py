@@ -231,6 +231,21 @@ def accept_offer(offer_id: str, data: AcceptOffer):
             WHERE id = %s
         """, (car_id,))
 
+
+        # 8️⃣ CREATE TRANSACTION RECORD
+        from routers.transactions import create_transaction_record
+
+        # Get the offer amount and dealer_id first
+        cur.execute("SELECT dealer_id, offer_amount FROM offers WHERE id = %s", (offer_id,))
+        offer_row = cur.fetchone()
+        create_transaction_record(
+            cur=cur,
+            offer_id=offer_id,
+            car_id=car_id,
+            dealer_id=str(offer_row[0]),
+            seller_id=seller_id,
+            amount=float(offer_row[1])
+        )
         conn.commit()
         return {"status": "ok", "accepted_offer": offer_id}
 
