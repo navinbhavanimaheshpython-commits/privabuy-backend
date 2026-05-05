@@ -6,7 +6,9 @@ import uuid
 from database import get_connection
 
 router = APIRouter(prefix="/transactions", tags=["transactions"])
-
+@router.get("/ping")
+def ping():
+    return {"status": "ok"}
 # ─────────────────────────────────────────────
 #  MODELS
 # ─────────────────────────────────────────────
