@@ -1,10 +1,10 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional
 from datetime import datetime, timedelta
 import uuid
-import asyncpg
-import os
+
+from database import get_connection   # ← should look like this, NOT asyncpg
 
 router = APIRouter(prefix="/transactions", tags=["transactions"])
 DATABASE_URL = os.environ.get("DATABASE_URL")
