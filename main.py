@@ -32,8 +32,6 @@ def home():
     return {"message": "AutoOS API running"}
 
 
-from fastapi import Header, HTTPException
-
 ADMIN_PASSWORD = "Hanuman@1015"  # Change this
 ADMIN_EMAIL = "navinbhavanimaheshpython@gmail.com"
 
