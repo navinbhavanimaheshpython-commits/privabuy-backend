@@ -412,3 +412,18 @@ def forfeit_transaction(transaction_id: str):
     finally:
         cur.close()
         conn.close()
+
+
+@router.get("/debug/dealer/{dealer_id}")
+def debug_dealer(dealer_id: str):
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT COUNT(*) FROM transactions")
+        count = cur.fetchone()[0]
+        return {"table_exists": True, "row_count": count}
+    except Exception as e:
+        return {"error": str(e)}
+    finally:
+        cur.close()
+        conn.close()
