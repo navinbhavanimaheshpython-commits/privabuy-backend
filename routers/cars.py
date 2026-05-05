@@ -37,6 +37,7 @@ class CarListing(BaseModel):
     overall_condition: str = ''
     comments: str = ''
     addons: str = ''
+    floor_price: float = 0
 
 @router.post("/list-car")
 def list_car(data: CarListing):
@@ -49,9 +50,9 @@ def list_car(data: CarListing):
             condition, seller_phone, seller_email, created_at, status,
             vin, title_status, loan_status, trim, color, transmission,
             drivetrain, keys, accidents, owners, smoked_in, overall_condition,
-            comments, addons, photos)
+            comments, addons, photos, floor_price)
             VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'open',
-            %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
         """, (
             car_id, data.seller_id, data.year, data.make, data.model,
             data.mileage, data.zip, data.condition, data.seller_phone,
@@ -60,7 +61,7 @@ def list_car(data: CarListing):
             data.color, data.transmission, data.drivetrain, data.keys,
             data.accidents, data.owners, data.smoked_in,
             data.overall_condition, data.comments, data.addons,
-            json.dumps(data.photos)
+            json.dumps(data.photos), data.floor_price
         ))
 
         cur.execute("SELECT id FROM dealers ORDER BY created_at ASC LIMIT 5")
@@ -160,7 +161,7 @@ async def get_market_value(year: int, make: str, model: str, mileage: int, zip: 
             prices = [l.get("price", 0) for l in listings if l.get("price", 0) > 1000]
             if not prices:
                 return {"found": False, "avg_price": 0, "count": 0}
-            avg = int(sum(prices) / len(prices))
+            avg = int(sum(prices) / len(prices))    
             min_price = min(prices)
             max_price = max(prices)
             trade_in_est = int(min_price * 0.91)
