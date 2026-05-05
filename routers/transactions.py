@@ -3,14 +3,9 @@ from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime, timedelta
 import uuid
-
-# Import your existing get_connection — same as every other router
-import sys, os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from database import get_connection   # adjust if your import path differs
+from database import get_connection
 
 router = APIRouter(prefix="/transactions", tags=["transactions"])
-
 
 # ─────────────────────────────────────────────
 #  MODELS
