@@ -112,7 +112,7 @@ def get_seller_transactions(seller_id: str):
         cur.close()
         conn.close()
 
-@router.get("/debug/count")
+@router.get("/ping/count")
 def debug_count():
     conn = get_connection()
     cur = conn.cursor()
