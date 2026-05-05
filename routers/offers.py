@@ -246,6 +246,7 @@ def accept_offer(offer_id: str, data: AcceptOffer):
             seller_id=seller_id,
             amount=float(offer_row[1])
         )
+
         conn.commit()
         return {"status": "ok", "accepted_offer": offer_id}
 
