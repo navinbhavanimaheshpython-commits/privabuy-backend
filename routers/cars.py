@@ -222,6 +222,65 @@ def admin_listings():
         conn.close()
 
 
+@router.get("/vehicle-history/{vin}")
+async def get_vehicle_history(vin: str):
+    import httpx
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            # Step 1: Query VIN
+            query_res = await client.get(
+                "https://api.vinaudit.com/v2/query",
+                params={
+                    "vin": vin,
+                    "key": "B9L22J3CICYEIGQ",
+                    "user": "navinbhavanimaheshpython@gmail.com",
+                    "pass": "Hanuman@1015",
+                    "format": "json",
+                    "mode": "prod"
+                }
+            )
+            query_data = query_res.json()
+            if not query_data.get("success"):
+                return {"found": False, "error": query_data.get("error", "VIN not found")}
+
+            report_id = query_data.get("id")
+
+            # Step 2: Pull full report
+            report_res = await client.get(
+                "https://api.vinaudit.com/v2/pullreport",
+                params={
+                    "id": report_id,
+                    "vin": vin,
+                    "key": "B9L22J3CICYEIGQ",
+                    "user": "navinbhavanimaheshpython@gmail.com",
+                    "pass": "Hanuman@1015",
+                    "format": "json",
+                    "mode": "prod"
+                }
+            )
+            report = report_res.json()
+            if not report.get("success"):
+                return {"found": False, "error": report.get("error", "Report failed")}
+
+            titles = report.get("titles", [])
+            accidents = report.get("accidents", [])
+            thefts = report.get("thefts", [])
+            owners = len(set(t.get("state") for t in titles if t.get("current") == False)) + 1
+            active_theft = any(t.get("theft_status") == "Active" for t in thefts)
+
+            return {
+                "found": True,
+                "vin": vin,
+                "owners": owners,
+                "accidents": len(accidents),
+                "theft": active_theft,
+                "clean": report.get("clean", True),
+                "title_records": len(titles),
+                "attributes": report.get("attributes", {})
+            }
+    except Exception as e:
+        return {"found": False, "error": str(e)}
+
 
 @router.get("/{car_id}")
 def get_car(car_id: str):
