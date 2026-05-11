@@ -46,7 +46,7 @@ def list_car(data: CarListing):
     try:
         car_id = str(uuid.uuid4())
         cur.execute("""
-            INSERT INTO cars (car_id, seller_id, year, make, model, mileage, zip,
+            INSERT INTO cars (id, seller_id, year, make, model, mileage, zip,
             condition, seller_phone, seller_email, created_at, status,
             vin, title_status, loan_status, trim, color, transmission,
             drivetrain, keys, accidents, owners, smoked_in, overall_condition,
@@ -288,12 +288,12 @@ def get_car(car_id: str):
     cur = conn.cursor()
     try:
         cur.execute("""
-                SELECT id, seller_id, year, make, model, mileage, zip,
-                    condition, created_at, status, vin, title_status,
-                    loan_status, trim, color, transmission, drivetrain,
-                    keys, accidents, owners, smoked_in, overall_condition,
-                    comments, addons, photos, floor_price
-                FROM cars WHERE car_id = %s
+            SELECT id, seller_id, year, make, model, mileage, zip,
+                   condition, created_at, status, vin, title_status,
+                   loan_status, trim, color, transmission, drivetrain,
+                   keys, accidents, owners, smoked_in, overall_condition,
+                   comments, addons, photos
+            FROM cars WHERE id = %s
         """, (car_id,))
         c = cur.fetchone()
         if not c:
@@ -315,8 +315,7 @@ def get_car(car_id: str):
             "accidents": c[18] or 'None', "owners": c[19] or 1,
             "smoked_in": c[20] or False, "overall_condition": c[21] or '',
             "comments": c[22] or '', "addons": c[23] or '',
-            "photos": photos or [],
-            "floor_price": float(c[25]) if c[25] else 0
+            "photos": photos or []
         }
     finally:
         cur.close()
