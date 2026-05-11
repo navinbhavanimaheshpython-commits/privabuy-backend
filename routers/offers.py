@@ -39,7 +39,7 @@ def submit_offer(data: Offer):
 
         # 2️⃣ Check car is open
         cur.execute("""
-            SELECT status FROM cars WHERE id = %s
+            SELECT status FROM cars WHERE car_id = %s
         """, (data.car_id,))
         car = cur.fetchone()
 
@@ -68,7 +68,7 @@ def submit_offer(data: Offer):
         # 4️⃣ Email seller about new bid
         cur.execute("""
             SELECT s.email, c.year, c.make, c.model
-            FROM cars c JOIN sellers s ON c.seller_id = s.id
+            FROM cars c JOIN sellers s ON c.seller_id = s.seller_id
             WHERE c.id = %s
         """, (data.car_id,))
         car_info = cur.fetchone()
@@ -142,7 +142,7 @@ def accept_offer(offer_id: str, data: AcceptOffer):
         cur.execute("""
             SELECT car_id
             FROM offers
-            WHERE id = %s
+            WHERE car_id = %s
         """, (offer_id,))
         result = cur.fetchone()
 
@@ -155,7 +155,7 @@ def accept_offer(offer_id: str, data: AcceptOffer):
         cur.execute("""
             SELECT seller_id, status
             FROM cars
-            WHERE id = %s
+            WHERE car_id = %s
             FOR UPDATE
         """, (car_id,))
         car = cur.fetchone()
@@ -181,7 +181,7 @@ def accept_offer(offer_id: str, data: AcceptOffer):
         cur.execute("""
             SELECT status
             FROM offers
-            WHERE id = %s
+            WHERE car_id = %s
             FOR UPDATE
         """, (offer_id,))
         offer = cur.fetchone()
@@ -212,7 +212,7 @@ def accept_offer(offer_id: str, data: AcceptOffer):
         cur.execute("""
             UPDATE offers
             SET status = 'accepted'
-            WHERE id = %s
+            WHERE car_id = %s
         """, (offer_id,))
 
         # 6️⃣ REJECT OTHERS
@@ -228,13 +228,13 @@ def accept_offer(offer_id: str, data: AcceptOffer):
         cur.execute("""
             UPDATE cars
             SET status = 'accepted_pending_settlement'
-            WHERE id = %s
+            WHERE car_id = %s
         """, (car_id,))
 
 
         # 8️⃣ CREATE TRANSACTION RECORD
         from routers.transactions import create_transaction_record
-        cur.execute("SELECT dealer_id, offer_amount FROM offers WHERE id = %s", (offer_id,))
+        cur.execute("SELECT dealer_id, offer_amount FROM offers WHERE car_id = %s", (offer_id,))
         offer_row = cur.fetchone()
         create_transaction_record(
             cur=cur,
@@ -282,7 +282,7 @@ def settle_offer(offer_id: str, data: SettleOffer):
         cur.execute("""
             SELECT car_id, status
             FROM offers
-            WHERE id = %s
+            WHERE car_id = %s
             FOR UPDATE
         """, (offer_id,))
         offer = cur.fetchone()
@@ -296,7 +296,7 @@ def settle_offer(offer_id: str, data: SettleOffer):
         cur.execute("""
             SELECT status, seller_id
             FROM cars
-            WHERE id = %s
+            WHERE car_id = %s
             FOR UPDATE
         """, (car_id,))
         car = cur.fetchone()
@@ -326,16 +326,16 @@ def settle_offer(offer_id: str, data: SettleOffer):
         # 4️⃣ TRANSITIONS
         if data.result == "success":
             cur.execute(
-                "UPDATE cars SET status = 'settled' WHERE id = %s",
+                "UPDATE cars SET status = 'settled' WHERE car_id = %s",
                 (car_id,)
             )
         else: #failure
             cur.execute(
-                "UPDATE offers SET status = 'settlement_failed' WHERE id = %s",
+                "UPDATE offers SET status = 'settlement_failed' WHERE car_id = %s",
                 (offer_id,)
             )
             cur.execute(
-                "UPDATE cars SET status = 'open' WHERE id = %s",
+                "UPDATE cars SET status = 'open' WHERE car_id = %s",
                 (car_id,)
             )
 
@@ -367,7 +367,7 @@ def get_dealer_won_vehicles(dealer_id: str):
                    s.phone as seller_phone, s.email as seller_email
             FROM offers o
             JOIN cars c ON o.car_id = c.id
-            JOIN sellers s ON c.seller_id = s.id
+            JOIN sellers s ON c.seller_id = s.seller_id
             WHERE o.dealer_id = %s AND o.status = 'accepted'
             ORDER BY o.created_at DESC
         """, (dealer_id,))
