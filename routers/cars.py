@@ -100,18 +100,17 @@ def get_active_cars():
     cur = conn.cursor()
     try:
         cur.execute("""
-            SELECT id, seller_id, year, make, model, mileage, zip, condition, created_at
+            SELECT car_id, seller_id, year, make, model, mileage, zip, condition, created_at, floor_price
             FROM cars WHERE status = 'open'
             ORDER BY created_at DESC
         """)
         cars = cur.fetchall()
         return [{"car_id": str(c[0]), "seller_id": str(c[1]), "year": c[2], "make": c[3], 
                  "model": c[4], "mileage": c[5], "zip": c[6], "condition": c[7],
-                 "created_at": str(c[8])} for c in cars]
+                 "created_at": str(c[8]), "floor_price": float(c[9]) if c[9] else 0} for c in cars]
     finally:
         cur.close()
         conn.close()
-
 @router.get("/market-value")
 async def get_market_value(year: int, make: str, model: str, mileage: int, zip: str = "60601"):
     import httpx
@@ -315,7 +314,8 @@ def get_car(car_id: str):
             "accidents": c[18] or 'None', "owners": c[19] or 1,
             "smoked_in": c[20] or False, "overall_condition": c[21] or '',
             "comments": c[22] or '', "addons": c[23] or '',
-            "photos": photos or []
+            "photos": photos or [],
+            "floor_price": float(c[25]) if c[25] else 0
         }
     finally:
         cur.close()
