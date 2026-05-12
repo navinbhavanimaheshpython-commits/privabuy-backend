@@ -287,7 +287,7 @@ def get_car(car_id: str):
     cur = conn.cursor()
     try:
         cur.execute("""
-            SELECT id, seller_id, year, make, model, mileage, zip,
+            SELECT car_id, seller_id, year, make, model, mileage, zip,
                    condition, created_at, status, vin, title_status,
                    loan_status, trim, color, transmission, drivetrain,
                    keys, accidents, owners, smoked_in, overall_condition,
