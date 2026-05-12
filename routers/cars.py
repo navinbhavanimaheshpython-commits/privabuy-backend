@@ -292,7 +292,7 @@ def get_car(car_id: str):
                    loan_status, trim, color, transmission, drivetrain,
                    keys, accidents, owners, smoked_in, overall_condition,
                    comments, addons, photos
-            FROM cars WHERE id = %s
+            FROM cars WHERE car_id = %s
         """, (car_id,))
         c = cur.fetchone()
         if not c:
