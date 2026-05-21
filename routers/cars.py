@@ -46,7 +46,7 @@ def list_car(data: CarListing):
     try:
         car_id = str(uuid.uuid4())
         cur.execute("""
-            INSERT INTO cars (id, seller_id, year, make, model, mileage, zip,
+            INSERT INTO cars (car_id, seller_id, year, make, model, mileage, zip,
             condition, seller_phone, seller_email, created_at, status,
             vin, title_status, loan_status, trim, color, transmission,
             drivetrain, keys, accidents, owners, smoked_in, overall_condition,
