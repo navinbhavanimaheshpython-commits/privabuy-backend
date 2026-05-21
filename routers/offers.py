@@ -68,7 +68,7 @@ def submit_offer(data: Offer):
         # 4️⃣ Email seller about new bid
         cur.execute("""
             SELECT s.email, c.year, c.make, c.model
-            FROM cars c JOIN sellers s ON c.seller_id = s.seller_id
+            FROM cars c JOIN sellers s ON c.seller_id = s.id
             WHERE c.id = %s
         """, (data.car_id,))
         car_info = cur.fetchone()
@@ -367,7 +367,7 @@ def get_dealer_won_vehicles(dealer_id: str):
                    s.phone as seller_phone, s.email as seller_email
             FROM offers o
             JOIN cars c ON o.car_id = c.id
-            JOIN sellers s ON c.seller_id = s.seller_id
+            JOIN sellers s ON c.seller_id = s.id
             WHERE o.dealer_id = %s AND o.status = 'accepted'
             ORDER BY o.created_at DESC
         """, (dealer_id,))
