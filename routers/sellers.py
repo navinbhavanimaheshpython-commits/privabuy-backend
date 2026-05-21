@@ -74,7 +74,7 @@ def get_seller_listings(seller_id: str):
     cur = conn.cursor()
     try:
         cur.execute("""
-            SELECT c.id, c.year, c.make, c.model, c.mileage, c.status, c.created_at,
+            SELECT c.car_id, c.year, c.make, c.model, c.mileage, c.status, c.created_at,
                    c.floor_price,
                    (SELECT COUNT(*) FROM offers o WHERE o.car_id = c.id) as bid_count,
                    (SELECT MAX(offer_amount) FROM offers o WHERE o.car_id = c.id) as top_bid
