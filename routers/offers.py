@@ -69,7 +69,7 @@ def submit_offer(data: Offer):
         cur.execute("""
             SELECT s.email, c.year, c.make, c.model
             FROM cars c JOIN sellers s ON c.seller_id = s.id
-            WHERE c.id = %s
+            WHERE c.car_id = %s
         """, (data.car_id,))
         car_info = cur.fetchone()
         if car_info:
@@ -366,7 +366,7 @@ def get_dealer_won_vehicles(dealer_id: str):
                    c.year, c.make, c.model, c.mileage, c.condition,
                    s.phone as seller_phone, s.email as seller_email
             FROM offers o
-            JOIN cars c ON o.car_id = c.id
+            JOIN cars c ON o.car_id = c.car_id
             JOIN sellers s ON c.seller_id = s.id
             WHERE o.dealer_id = %s AND o.status = 'accepted'
             ORDER BY o.created_at DESC
@@ -413,7 +413,7 @@ def get_dealer_analytics(dealer_id: str):
         # Top makes won
         cur.execute("""
             SELECT c.make, COUNT(*) as count
-            FROM offers o JOIN cars c ON o.car_id = c.id
+            FROM offers o JOIN cars c ON o.car_id = c.car_id
             WHERE o.dealer_id = %s AND o.status = 'accepted'
             GROUP BY c.make ORDER BY count DESC LIMIT 5
         """, (dealer_id,))
@@ -438,7 +438,7 @@ def get_dealer_analytics(dealer_id: str):
         # Recent won vehicles
         cur.execute("""
             SELECT c.year, c.make, c.model, c.mileage, o.offer_amount, o.created_at
-            FROM offers o JOIN cars c ON o.car_id = c.id
+            FROM offers o JOIN cars c ON o.car_id = c.car_id
             WHERE o.dealer_id = %s AND o.status = 'accepted'
             ORDER BY o.created_at DESC LIMIT 5
         """, (dealer_id,))
