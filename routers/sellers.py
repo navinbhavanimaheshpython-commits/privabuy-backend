@@ -76,8 +76,8 @@ def get_seller_listings(seller_id: str):
         cur.execute("""
             SELECT c.car_id, c.year, c.make, c.model, c.mileage, c.status, c.created_at,
                    c.floor_price,
-                   (SELECT COUNT(*) FROM offers o WHERE o.car_id = c.id) as bid_count,
-                   (SELECT MAX(offer_amount) FROM offers o WHERE o.car_id = c.id) as top_bid
+                   (SELECT COUNT(*) FROM offers o WHERE o.car_id = c.car_id) as bid_count,
+                   (SELECT MAX(offer_amount) FROM offers o WHERE o.car_id = c.car_id) as top_bid
             FROM cars c
             WHERE c.seller_id = %s
             ORDER BY c.created_at DESC
