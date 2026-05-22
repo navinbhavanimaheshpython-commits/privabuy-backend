@@ -142,7 +142,7 @@ def accept_offer(offer_id: str, data: AcceptOffer):
         cur.execute("""
             SELECT car_id
             FROM offers
-            WHERE id = %s
+            WHERE car_id = %s
         """, (offer_id,))
         result = cur.fetchone()
 
