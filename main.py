@@ -8,7 +8,12 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+    "https://privabuy.com",
+    "https://www.privabuy.com",
+    "https://privabuy.vercel.app",
+    "http://localhost:5173",
+    ],
     allow_credentials=False,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=["*"],
