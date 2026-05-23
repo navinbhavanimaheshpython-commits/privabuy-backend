@@ -138,11 +138,11 @@ def accept_offer(offer_id: str, data: AcceptOffer):
     cur = conn.cursor()
 
     try:
-        # 1️⃣ Get car_id from offer (no lock yet)
+        # 1 Get car_id from offer
         cur.execute("""
             SELECT car_id
             FROM offers
-            WHERE car_id = %s
+            WHERE id = %s
         """, (offer_id,))
         result = cur.fetchone()
 
@@ -151,7 +151,7 @@ def accept_offer(offer_id: str, data: AcceptOffer):
 
         car_id = result[0]
 
-        # 2️⃣ LOCK CAR FIRST (this is the key fix)
+        # 2 LOCK CAR FIRST
         cur.execute("""
             SELECT seller_id, status
             FROM cars
@@ -166,22 +166,16 @@ def accept_offer(offer_id: str, data: AcceptOffer):
         car_seller_id, car_status = car
 
         if car_status != "open":
-            raise HTTPException(
-                status_code=409,
-                detail="Offers are closed for this vehicle"
-            )
+            raise HTTPException(status_code=409, detail="Offers are closed for this vehicle")
 
         if str(car_seller_id) != seller_id:
-            raise HTTPException(
-                status_code=403,
-                detail="Not authorized to accept offers for this car"
-            )
+            raise HTTPException(status_code=403, detail="Not authorized to accept offers for this car")
 
-        # 3️⃣ LOCK TARGET OFFER
+        # 3 LOCK TARGET OFFER
         cur.execute("""
             SELECT status
             FROM offers
-            WHERE car_id = %s
+            WHERE id = %s
             FOR UPDATE
         """, (offer_id,))
         offer = cur.fetchone()
@@ -194,7 +188,7 @@ def accept_offer(offer_id: str, data: AcceptOffer):
         if current_status != "pending":
             raise HTTPException(status_code=409, detail="Offer already processed")
 
-        # 4️⃣ Check if any offer already accepted (NOW SAFE)
+        # 4 Check if any offer already accepted
         cur.execute("""
             SELECT id
             FROM offers
@@ -203,19 +197,16 @@ def accept_offer(offer_id: str, data: AcceptOffer):
         existing = cur.fetchone()
 
         if existing:
-            raise HTTPException(
-                status_code=409,
-                detail="Another offer has already been accepted"
-            )
+            raise HTTPException(status_code=409, detail="Another offer has already been accepted")
 
-        # 5️⃣ ACCEPT THIS OFFER
+        # 5 ACCEPT THIS OFFER
         cur.execute("""
             UPDATE offers
             SET status = 'accepted'
-            WHERE car_id = %s
+            WHERE id = %s
         """, (offer_id,))
 
-        # 6️⃣ REJECT OTHERS
+        # 6 REJECT OTHERS
         cur.execute("""
             UPDATE offers
             SET status = 'rejected'
@@ -224,17 +215,16 @@ def accept_offer(offer_id: str, data: AcceptOffer):
               AND status = 'pending'
         """, (car_id, offer_id))
 
-        # 7️⃣ UPDATE CAR
+        # 7 UPDATE CAR
         cur.execute("""
             UPDATE cars
             SET status = 'accepted_pending_settlement'
             WHERE car_id = %s
         """, (car_id,))
 
-
-        # 8️⃣ CREATE TRANSACTION RECORD
+        # 8 CREATE TRANSACTION RECORD
         from routers.transactions import create_transaction_record
-        cur.execute("SELECT dealer_id, offer_amount FROM offers WHERE car_id = %s", (offer_id,))
+        cur.execute("SELECT dealer_id, offer_amount FROM offers WHERE id = %s", (offer_id,))
         offer_row = cur.fetchone()
         create_transaction_record(
             cur=cur,
@@ -254,8 +244,6 @@ def accept_offer(offer_id: str, data: AcceptOffer):
     finally:
         cur.close()
         conn.close()
-
-
 
 # 🚨 CRITICAL SECTION — DO NOT MODIFY 🚨
 # This function is concurrency-tested and guarantees:
