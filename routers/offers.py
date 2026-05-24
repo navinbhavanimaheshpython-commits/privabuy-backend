@@ -6,22 +6,6 @@ from datetime import datetime
 import psycopg2
 from typing import Literal
 from email_utils import send_seller_new_bid
-import httpx
-import os
-
-RESEND_API_KEY = os.environ.get("RESEND_API_KEY")
-FROM_EMAIL = "PrivaBuy <notifications@privabuy.com>"
-
-async def send_email(to: str, subject: str, html: str):
-    try:
-        async with httpx.AsyncClient() as client:
-            await client.post(
-                "https://api.resend.com/emails",
-                headers={"Authorization": f"Bearer {RESEND_API_KEY}"},
-                json={"from": FROM_EMAIL, "to": [to], "subject": subject, "html": html}
-            )
-    except Exception as e:
-        print(f"Email send failed: {e}")
 
 router = APIRouter(
     prefix="/offers",
@@ -148,7 +132,7 @@ class AcceptOffer(BaseModel):
 #
 # If you change this without testing, you WILL introduce race conditions.
 @router.post("/accept/{offer_id}")
-async def accept_offer(offer_id: str, data: AcceptOffer):
+def accept_offer(offer_id: str, data: AcceptOffer):
     seller_id = data.seller_id
     conn = get_connection()
     cur = conn.cursor()
@@ -251,40 +235,6 @@ async def accept_offer(offer_id: str, data: AcceptOffer):
             amount=float(offer_row[1])
         )
         conn.commit()
-
-        # 9 EMAIL DEALER — bid accepted, pay within 24 hours
-        cur.execute("""
-            SELECT o.offer_amount,
-                   c.year, c.make, c.model,
-                   s.email AS seller_email, s.name AS seller_name,
-                   d.email AS dealer_email, d.dealer_name
-            FROM offers o
-            JOIN cars c ON c.car_id = o.car_id
-            JOIN sellers s ON s.seller_id = c.seller_id
-            JOIN dealers d ON d.dealer_id = o.dealer_id
-            WHERE o.id = %s
-        """, (offer_id,))
-        row = cur.fetchone()
-        if row:
-            cols = [desc[0] for desc in cur.description]
-            p = dict(zip(cols, row))
-            vehicle = f"{p['year']} {p['make']} {p['model']}"
-            await send_email(
-                p['dealer_email'],
-                f"Your bid was accepted — {vehicle}",
-                f"""<p>Hi {p['dealer_name']},</p>
-                <p>The seller accepted your bid of <strong>${p['offer_amount']:,}</strong>
-                   for the <strong>{vehicle}</strong>.</p>
-                <p>You have <strong>24 hours</strong> to pay the $600 PrivaBuy platform fee
-                   or the bid will be forfeited.</p>
-                <p style="margin-top:24px">
-                  <a href="https://privabuy.com/app?role=dealer"
-                     style="background:#7c5cbf;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;">
-                    Pay Now →
-                  </a>
-                </p>"""
-            )
-
         return {"status": "ok", "accepted_offer": offer_id}
 
     except Exception as e:
@@ -345,7 +295,8 @@ def settle_offer(offer_id: str, data: SettleOffer):
         car_status, car_seller_id = car
 
         if str(car_seller_id) != str(data.seller_id):
-            raise HTTPException(status_code=403, detail="Not authourized to settle this car")
+            raise HTTPException(status_code=403,detail="Not authourized to settle this car")
+
 
         # 3️⃣ PRECONDITIONS (non-negotiable)
         if offer_status != "accepted":
@@ -366,7 +317,7 @@ def settle_offer(offer_id: str, data: SettleOffer):
                 "UPDATE cars SET status = 'settled' WHERE car_id = %s",
                 (car_id,)
             )
-        else:
+        else: #failure
             cur.execute(
                 "UPDATE offers SET status = 'settlement_failed' WHERE car_id = %s",
                 (offer_id,)
@@ -378,19 +329,18 @@ def settle_offer(offer_id: str, data: SettleOffer):
 
         conn.commit()
         return {"status": "ok"}
-
+    
     except HTTPException as e:
         conn.rollback()
         raise
 
     except Exception as e:
         conn.rollback()
-        raise HTTPException(500, detail=str(e))
+        raise HTTPException(500,detail=str(e))
 
     finally:
         cur.close()
         conn.close()
-
 
 from typing import Literal
 
@@ -480,8 +430,8 @@ def get_dealer_analytics(dealer_id: str):
             WHERE o.dealer_id = %s AND o.status = 'accepted'
             ORDER BY o.created_at DESC LIMIT 5
         """, (dealer_id,))
-        recent_won = [{"year": r[0], "make": r[1], "model": r[2],
-                       "mileage": r[3], "amount": float(r[4]),
+        recent_won = [{"year": r[0], "make": r[1], "model": r[2], 
+                       "mileage": r[3], "amount": float(r[4]), 
                        "date": str(r[5])} for r in cur.fetchall()]
 
         # This month vs last month spend
@@ -514,6 +464,8 @@ def get_dealer_analytics(dealer_id: str):
         conn.close()
 
 
+
+
 @router.get("/car/{car_id}/top-bids")
 def get_top_bids(car_id: str):
     conn = get_connection()
@@ -527,7 +479,7 @@ def get_top_bids(car_id: str):
             LIMIT 10
         """, (car_id,))
         rows = cur.fetchall()
-        return [{"offer_id": str(r[0]), "dealer_id": str(r[1]),
+        return [{"offer_id": str(r[0]), "dealer_id": str(r[1]), 
                  "amount": r[2], "created_at": str(r[3])} for r in rows]
     finally:
         cur.close()
