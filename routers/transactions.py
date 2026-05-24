@@ -148,6 +148,18 @@ def acknowledge_bill_of_sale(req: BillOfSaleAckRequest):
             cur.execute("UPDATE transactions SET status = 'awaiting_pickup_schedule' WHERE transaction_id = %s", (req.transaction_id,))
             conn.commit()
             return {"status": "awaiting_pickup_schedule", "both_acked": True}
+        try:
+            cur.execute("SELECT c.year, c.make, c.model, s.email, s.name, d.email, d.dealer_name FROM transactions t JOIN cars c ON t.car_id = c.car_id JOIN sellers s ON t.seller_id = s.id JOIN dealers d ON t.dealer_id = d.id WHERE t.transaction_id = %s", (req.transaction_id,))
+            r = cur.fetchone()
+            if r:
+                if req.party == "dealer":
+                    from email_utils import send_seller_dealer_signed_bos
+                    send_seller_dealer_signed_bos(r[3], r[4] or 'Seller', r[0], r[1], r[2])
+                elif req.party == "seller":
+                    from email_utils import send_dealer_seller_signed_bos
+                    send_dealer_seller_signed_bos(r[5], r[6] or 'Dealer', r[0], r[1], r[2])
+        except Exception as email_err:
+            print(f"Email error: {email_err}")
         conn.commit()
         waiting_on = "seller" if req.party == "dealer" else "dealer"
         return {"status": "awaiting_bill_of_sale", "both_acked": False, "waiting_on": waiting_on}
@@ -171,6 +183,14 @@ def propose_pickup_slots(req: ProposeTimeSlotsRequest):
             raise HTTPException(status_code=403, detail="Not authorized")
         cur.execute("UPDATE transactions SET pickup_slot_1=%s, pickup_slot_2=%s, pickup_slot_3=%s, slots_proposed_at=%s, status='awaiting_slot_confirmation' WHERE transaction_id=%s",
                     (req.slot_1, req.slot_2, req.slot_3, datetime.utcnow(), req.transaction_id))
+        try:
+            cur.execute("SELECT c.year, c.make, c.model, s.email, s.name FROM transactions t JOIN cars c ON t.car_id = c.car_id JOIN sellers s ON t.seller_id = s.id WHERE t.transaction_id = %s", (req.transaction_id,))
+            r = cur.fetchone()
+            if r:
+                from email_utils import send_seller_pickup_slots_proposed
+                send_seller_pickup_slots_proposed(r[3], r[4] or 'Seller', r[0], r[1], r[2], req.slot_1, req.slot_2, req.slot_3)
+        except Exception as email_err:
+            print(f"Email error: {email_err}")
         conn.commit()
         return {"status": "awaiting_slot_confirmation"}
     except Exception:
@@ -193,6 +213,15 @@ def confirm_pickup_slot(req: ConfirmSlotRequest):
             raise HTTPException(status_code=403, detail="Not authorized")
         cur.execute("UPDATE transactions SET confirmed_pickup_slot=%s, slot_confirmed_at=%s, status='pickup_scheduled' WHERE transaction_id=%s",
                     (req.chosen_slot, datetime.utcnow(), req.transaction_id))
+        try:
+            cur.execute("SELECT c.year, c.make, c.model, s.email, s.name, d.email, d.dealer_name FROM transactions t JOIN cars c ON t.car_id = c.car_id JOIN sellers s ON t.seller_id = s.id JOIN dealers d ON t.dealer_id = d.id WHERE t.transaction_id = %s", (req.transaction_id,))
+            r = cur.fetchone()
+            if r:
+                from email_utils import send_dealer_pickup_confirmed, send_seller_pickup_confirmed
+                send_dealer_pickup_confirmed(r[5], r[6] or 'Dealer', r[0], r[1], r[2], req.chosen_slot)
+                send_seller_pickup_confirmed(r[3], r[4] or 'Seller', r[0], r[1], r[2], req.chosen_slot)
+        except Exception as email_err:
+            print(f"Email error: {email_err}")
         conn.commit()
         return {"status": "pickup_scheduled", "pickup_time": req.chosen_slot}
     except Exception:
@@ -216,6 +245,14 @@ def confirm_pickup(req: PickupConfirmRequest):
         new_status = "awaiting_seller_payment_confirm" if req.as_described else "dispute_flagged"
         cur.execute("UPDATE transactions SET pickup_confirmed=TRUE, pickup_confirmed_at=%s, vehicle_as_described=%s, discrepancy_note=%s, status=%s WHERE transaction_id=%s",
                     (datetime.utcnow(), req.as_described, req.discrepancy_note, new_status, req.transaction_id))
+        try:
+            cur.execute("SELECT c.year, c.make, c.model, s.email, s.name, t.amount FROM transactions t JOIN cars c ON t.car_id = c.car_id JOIN sellers s ON t.seller_id = s.id WHERE t.transaction_id = %s", (req.transaction_id,))
+            r = cur.fetchone()
+            if r and req.as_described:
+                from email_utils import send_seller_vehicle_confirmed
+                send_seller_vehicle_confirmed(r[3], r[4] or 'Seller', r[0], r[1], r[2], float(r[5]))
+        except Exception as email_err:
+            print(f"Email error: {email_err}")
         conn.commit()
         return {"status": new_status}
     except Exception:
@@ -238,6 +275,14 @@ def seller_confirm_payment(req: SellerPaymentConfirmRequest):
             raise HTTPException(status_code=403, detail="Not authorized")
         cur.execute("UPDATE transactions SET seller_payment_confirmed=TRUE, seller_payment_confirmed_at=%s, status='awaiting_seller_fee' WHERE transaction_id=%s",
                     (datetime.utcnow(), req.transaction_id))
+        try:
+            cur.execute("SELECT c.year, c.make, c.model, s.email, s.name FROM transactions t JOIN cars c ON t.car_id = c.car_id JOIN sellers s ON t.seller_id = s.id WHERE t.transaction_id = %s", (req.transaction_id,))
+            r = cur.fetchone()
+            if r:
+                from email_utils import send_seller_payment_confirmed_complete
+                send_seller_payment_confirmed_complete(r[3], r[4] or 'Seller', r[0], r[1], r[2])
+        except Exception as email_err:
+            print(f"Email error: {email_err}")
         conn.commit()
         return {"status": "awaiting_seller_fee"}
     except Exception:
@@ -267,6 +312,14 @@ def mark_dealer_paid(transaction_id: str):
             conn.commit()
             raise HTTPException(status_code=400, detail="24hr deadline expired — bid forfeited")
         cur.execute("UPDATE transactions SET dealer_fee_paid=TRUE, dealer_paid_at=%s, status='awaiting_bill_of_sale' WHERE transaction_id=%s", (datetime.utcnow(), transaction_id))
+        try:
+            cur.execute("SELECT c.year, c.make, c.model, s.email, s.name, d.email, d.dealer_name FROM transactions t JOIN cars c ON t.car_id = c.car_id JOIN sellers s ON t.seller_id = s.id JOIN dealers d ON t.dealer_id = d.id WHERE t.transaction_id = %s", (transaction_id,))
+            r = cur.fetchone()
+            if r:
+                from email_utils import send_seller_dealer_paid_fee
+                send_seller_dealer_paid_fee(r[3], r[4] or 'Seller', r[0], r[1], r[2])
+        except Exception as email_err:
+            print(f"Email error: {email_err}")
         conn.commit()
         return {"status": "awaiting_bill_of_sale"}
     except Exception:
