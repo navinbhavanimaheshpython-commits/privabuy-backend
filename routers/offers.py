@@ -6,6 +6,22 @@ from datetime import datetime
 import psycopg2
 from typing import Literal
 from email_utils import send_seller_new_bid
+import httpx
+import os
+
+RESEND_API_KEY = os.environ.get("RESEND_API_KEY")
+FROM_EMAIL = "PrivaBuy <notifications@privabuy.com>"
+
+def send_email_sync(to: str, subject: str, html: str):
+    try:
+        httpx.post(
+            "https://api.resend.com/emails",
+            headers={"Authorization": f"Bearer {RESEND_API_KEY}"},
+            json={"from": FROM_EMAIL, "to": [to], "subject": subject, "html": html},
+            timeout=5
+        )
+    except Exception as e:
+        print(f"Email failed: {e}")
 
 router = APIRouter(
     prefix="/offers",
@@ -235,6 +251,35 @@ def accept_offer(offer_id: str, data: AcceptOffer):
             amount=float(offer_row[1])
         )
         conn.commit()
+
+        # 9 EMAIL DEALER — bid accepted, pay within 24 hours
+        cur.execute("""
+            SELECT o.offer_amount,
+                   c.year, c.make, c.model,
+                   d.email AS dealer_email, d.dealer_name
+            FROM offers o
+            JOIN cars c ON c.car_id = o.car_id
+            JOIN dealers d ON d.dealer_id = o.dealer_id
+            WHERE o.id = %s
+        """, (offer_id,))
+        row = cur.fetchone()
+        if row:
+            cols = [desc[0] for desc in cur.description]
+            p = dict(zip(cols, row))
+            vehicle = f"{p['year']} {p['make']} {p['model']}"
+            send_email_sync(p['dealer_email'], f"Your bid was accepted — {vehicle}",
+                f"""<p>Hi {p['dealer_name']},</p>
+                <p>The seller accepted your bid of <strong>${p['offer_amount']:,}</strong>
+                   for the <strong>{vehicle}</strong>.</p>
+                <p>You have <strong>24 hours</strong> to pay the $600 PrivaBuy platform fee
+                   or the bid will be forfeited.</p>
+                <p style="margin-top:24px">
+                  <a href="https://privabuy.com/app?role=dealer"
+                     style="background:#7c5cbf;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;">
+                    Pay Now →
+                  </a>
+                </p>""")
+
         return {"status": "ok", "accepted_offer": offer_id}
 
     except Exception as e:
@@ -462,8 +507,6 @@ def get_dealer_analytics(dealer_id: str):
     finally:
         cur.close()
         conn.close()
-
-
 
 
 @router.get("/car/{car_id}/top-bids")
