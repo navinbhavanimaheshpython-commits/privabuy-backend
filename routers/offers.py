@@ -234,6 +234,23 @@ def accept_offer(offer_id: str, data: AcceptOffer):
             seller_id=seller_id,
             amount=float(offer_row[1])
         )
+
+        try:
+            cur.execute("""
+                SELECT c.year, c.make, c.model, s.email, s.name, d.email, d.dealer_name
+                FROM cars c 
+                JOIN sellers s ON c.seller_id = s.id
+                JOIN dealers d ON d.id = %s
+                WHERE c.car_id = %s
+            """, (str(offer_row[0]), car_id))
+            r = cur.fetchone()
+            if r:
+                from email_utils import send_dealer_bid_accepted, send_seller_bid_accepted_confirmation
+                send_dealer_bid_accepted(r[5], r[6], r[0], r[1], r[2], float(offer_row[1]))
+                send_seller_bid_accepted_confirmation(r[3], r[4] or 'Seller', r[0], r[1], r[2], float(offer_row[1]))
+        except Exception as email_err:
+            print(f"Email error: {email_err}")
+            
         conn.commit()
         return {"status": "ok", "accepted_offer": offer_id}
 
