@@ -29,7 +29,7 @@ def get_txn_parties(cur, transaction_id: str):
                d.email AS dealer_email, d.dealer_name
         FROM transactions t
         JOIN cars c ON c.car_id = t.car_id
-        JOIN sellers s ON s.seller_id = t.seller_id
+        JOIN sellers s ON s.id = t.seller_id
         JOIN dealers d ON d.dealer_id = t.dealer_id
         WHERE t.transaction_id = %s
     """, (transaction_id,))
@@ -182,8 +182,8 @@ def acknowledge_bill_of_sale(req: BillOfSaleAckRequest):
             cur.execute("UPDATE transactions SET status = 'awaiting_pickup_schedule' WHERE transaction_id = %s", (req.transaction_id,))
             conn.commit()
             return {"status": "awaiting_pickup_schedule", "both_acked": True}
-        conn.commit()
         p = get_txn_parties(cur, req.transaction_id)
+        conn.commit()
         if p:
             vehicle = f"{p['year']} {p['make']} {p['model']}"
             if req.party == "dealer":
@@ -222,8 +222,8 @@ def propose_pickup_slots(req: ProposeTimeSlotsRequest):
             raise HTTPException(status_code=403, detail="Not authorized")
         cur.execute("UPDATE transactions SET pickup_slot_1=%s, pickup_slot_2=%s, pickup_slot_3=%s, slots_proposed_at=%s, status='awaiting_slot_confirmation' WHERE transaction_id=%s",
                     (req.slot_1, req.slot_2, req.slot_3, datetime.utcnow(), req.transaction_id))
-        conn.commit()
         p = get_txn_parties(cur, req.transaction_id)
+        conn.commit()
         if p:
             vehicle = f"{p['year']} {p['make']} {p['model']}"
             send_email_sync(p['seller_email'], f"Choose a pickup time for your {vehicle}",
@@ -253,8 +253,8 @@ def confirm_pickup_slot(req: ConfirmSlotRequest):
             raise HTTPException(status_code=403, detail="Not authorized")
         cur.execute("UPDATE transactions SET confirmed_pickup_slot=%s, slot_confirmed_at=%s, status='pickup_scheduled' WHERE transaction_id=%s",
                     (req.chosen_slot, datetime.utcnow(), req.transaction_id))
-        conn.commit()
         p = get_txn_parties(cur, req.transaction_id)
+        conn.commit()
         if p:
             vehicle = f"{p['year']} {p['make']} {p['model']}"
             send_email_sync(p['dealer_email'], f"Pickup confirmed — {vehicle}",
@@ -290,8 +290,8 @@ def confirm_pickup(req: PickupConfirmRequest):
         new_status = "awaiting_seller_payment_confirm" if req.as_described else "dispute_flagged"
         cur.execute("UPDATE transactions SET pickup_confirmed=TRUE, pickup_confirmed_at=%s, vehicle_as_described=%s, discrepancy_note=%s, status=%s WHERE transaction_id=%s",
                     (datetime.utcnow(), req.as_described, req.discrepancy_note, new_status, req.transaction_id))
-        conn.commit()
         p = get_txn_parties(cur, req.transaction_id)
+        conn.commit()
         if p:
             vehicle = f"{p['year']} {p['make']} {p['model']}"
             if req.as_described:
@@ -328,8 +328,8 @@ def seller_confirm_payment(req: SellerPaymentConfirmRequest):
             raise HTTPException(status_code=403, detail="Not authorized")
         cur.execute("UPDATE transactions SET seller_payment_confirmed=TRUE, seller_payment_confirmed_at=%s, status='awaiting_seller_fee' WHERE transaction_id=%s",
                     (datetime.utcnow(), req.transaction_id))
-        conn.commit()
         p = get_txn_parties(cur, req.transaction_id)
+        conn.commit()
         if p:
             vehicle = f"{p['year']} {p['make']} {p['model']}"
             send_email_sync(p['dealer_email'], f"Seller confirmed payment — deal wrapping up for {vehicle}",
@@ -364,8 +364,8 @@ def mark_dealer_paid(transaction_id: str):
             conn.commit()
             raise HTTPException(status_code=400, detail="24hr deadline expired — bid forfeited")
         cur.execute("UPDATE transactions SET dealer_fee_paid=TRUE, dealer_paid_at=%s, status='awaiting_bill_of_sale' WHERE transaction_id=%s", (datetime.utcnow(), transaction_id))
-        conn.commit()
         p = get_txn_parties(cur, transaction_id)
+        conn.commit()
         if p:
             vehicle = f"{p['year']} {p['make']} {p['model']}"
             send_email_sync(p['seller_email'], f"The dealer paid — review your Bill of Sale for your {vehicle}",
@@ -389,8 +389,8 @@ def mark_seller_paid(transaction_id: str):
     try:
         cur.execute("UPDATE transactions SET seller_fee_paid=TRUE, seller_paid_at=%s, status='completed', completed_at=%s WHERE transaction_id=%s",
                     (datetime.utcnow(), datetime.utcnow(), transaction_id))
-        conn.commit()
         p = get_txn_parties(cur, transaction_id)
+        conn.commit()
         if p:
             vehicle = f"{p['year']} {p['make']} {p['model']}"
             send_email_sync(p['seller_email'], f"🎉 Your deal is complete — {vehicle}",
