@@ -252,38 +252,45 @@ def accept_offer(offer_id: str, data: AcceptOffer):
         )
 
         # 9 FETCH EMAIL DATA before commit
-        cur.execute("""
-            SELECT o.offer_amount,
-                   c.year, c.make, c.model,
-                   d.email AS dealer_email, d.dealer_name
-            FROM offers o
-            JOIN cars c ON c.car_id = o.car_id
-            JOIN dealers d ON d.dealer_id = o.dealer_id
-            WHERE o.id = %s
-        """, (offer_id,))
-        email_row = cur.fetchone()
-        email_data = None
-        if email_row:
-            cols = [desc[0] for desc in cur.description]
-            email_data = dict(zip(cols, email_row))
+        try:
+            cur.execute("""
+                SELECT o.offer_amount,
+                       c.year, c.make, c.model,
+                       d.email AS dealer_email, d.dealer_name
+                FROM offers o
+                JOIN cars c ON c.car_id = o.car_id
+                JOIN dealers d ON d.dealer_id = o.dealer_id
+                WHERE o.id = %s
+            """, (offer_id,))
+            email_row = cur.fetchone()
+            email_data = None
+            if email_row:
+                cols = [desc[0] for desc in cur.description]
+                email_data = dict(zip(cols, email_row))
+        except Exception as e:
+            print(f"Email fetch failed: {e}")
+            email_data = None
 
         conn.commit()
 
-        # 10 SEND EMAIL after commit — failure here won't rollback transaction
-        if email_data:
-            vehicle = f"{email_data['year']} {email_data['make']} {email_data['model']}"
-            send_email_sync(email_data['dealer_email'], f"Your bid was accepted — {vehicle}",
-                f"""<p>Hi {email_data['dealer_name']},</p>
-                <p>The seller accepted your bid of <strong>${email_data['offer_amount']:,}</strong>
-                   for the <strong>{vehicle}</strong>.</p>
-                <p>You have <strong>24 hours</strong> to pay the $600 PrivaBuy platform fee
-                   or the bid will be forfeited.</p>
-                <p style="margin-top:24px">
-                  <a href="https://privabuy.com/app?role=dealer"
-                     style="background:#7c5cbf;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;">
-                    Pay Now →
-                  </a>
-                </p>""")
+        # 10 SEND EMAIL after commit
+        try:
+            if email_data:
+                vehicle = f"{email_data['year']} {email_data['make']} {email_data['model']}"
+                send_email_sync(email_data['dealer_email'], f"Your bid was accepted — {vehicle}",
+                    f"""<p>Hi {email_data['dealer_name']},</p>
+                    <p>The seller accepted your bid of <strong>${email_data['offer_amount']:,}</strong>
+                       for the <strong>{vehicle}</strong>.</p>
+                    <p>You have <strong>24 hours</strong> to pay the $600 PrivaBuy platform fee
+                       or the bid will be forfeited.</p>
+                    <p style="margin-top:24px">
+                      <a href="https://privabuy.com/app?role=dealer"
+                         style="background:#7c5cbf;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;">
+                        Pay Now →
+                      </a>
+                    </p>""")
+        except Exception as e:
+            print(f"Email send failed: {e}")
 
         return {"status": "ok", "accepted_offer": offer_id}
 
