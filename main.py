@@ -41,10 +41,12 @@ def admin_login(data: dict):
     return {"status": "ok", "token": "pb-admin-2026"}
 
 
+from fastapi.responses import JSONResponse
+
 @app.post("/api/chat")
 async def chat(request: Request):
-    body = await request.json()
     import httpx
+    body = await request.json()
     async with httpx.AsyncClient() as client:
         response = await client.post(
             "https://api.anthropic.com/v1/messages",
@@ -56,4 +58,4 @@ async def chat(request: Request):
             json=body,
             timeout=30
         )
-    return response.json()
+    return JSONResponse(content=response.json())
