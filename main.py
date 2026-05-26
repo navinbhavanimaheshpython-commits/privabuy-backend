@@ -3,6 +3,7 @@ load_dotenv()
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from routers import cars, dealers, offers, sellers, payments, transactions
+import os
 
 app = FastAPI()
 
