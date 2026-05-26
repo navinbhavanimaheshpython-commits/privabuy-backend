@@ -38,3 +38,21 @@ def admin_login(data: dict):
     if data.get("email") != ADMIN_EMAIL or data.get("password") != ADMIN_PASSWORD:
         raise HTTPException(status_code=401, detail="Invalid credentials")
     return {"status": "ok", "token": "pb-admin-2026"}
+
+
+@app.post("/api/chat")
+async def chat(request: Request):
+    body = await request.json()
+    import httpx
+    async with httpx.AsyncClient() as client:
+        response = await client.post(
+            "https://api.anthropic.com/v1/messages",
+            headers={
+                "x-api-key": os.environ["ANTHROPIC_API_KEY"],
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json",
+            },
+            json=body,
+            timeout=30
+        )
+    return response.json()
