@@ -38,6 +38,9 @@ class CarListing(BaseModel):
     comments: str = ''
     addons: str = ''
     floor_price: float = 0
+    lien_holder: str = ''
+    lien_payoff_amount: int = 0
+    lien_payoff_url: str = ''
 
 @router.post("/list-car")
 def list_car(data: CarListing):
@@ -50,9 +53,11 @@ def list_car(data: CarListing):
             condition, seller_phone, seller_email, created_at, status,
             vin, title_status, loan_status, trim, color, transmission,
             drivetrain, keys, accidents, owners, smoked_in, overall_condition,
-            comments, addons, photos, floor_price)
+            comments, addons, photos, floor_price,
+            lien_holder, lien_payoff_amount, lien_payoff_url)
             VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'open',
-            %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
+            %s,%s,%s)
         """, (
             car_id, data.seller_id, data.year, data.make, data.model,
             data.mileage, data.zip, data.condition, data.seller_phone,
@@ -61,7 +66,8 @@ def list_car(data: CarListing):
             data.color, data.transmission, data.drivetrain, data.keys,
             data.accidents, data.owners, data.smoked_in,
             data.overall_condition, data.comments, data.addons,
-            json.dumps(data.photos), data.floor_price
+            json.dumps(data.photos), data.floor_price,
+            data.lien_holder, data.lien_payoff_amount, data.lien_payoff_url
         ))
 
         cur.execute("SELECT id FROM dealers ORDER BY created_at ASC LIMIT 5")
@@ -288,10 +294,11 @@ def get_car(car_id: str):
     try:
         cur.execute("""
             SELECT car_id, seller_id, year, make, model, mileage, zip,
-                   condition, created_at, status, vin, title_status,
-                   loan_status, trim, color, transmission, drivetrain,
-                   keys, accidents, owners, smoked_in, overall_condition,
-                   comments, addons, photos, floor_price
+                condition, created_at, status, vin, title_status,
+                loan_status, trim, color, transmission, drivetrain,
+                keys, accidents, owners, smoked_in, overall_condition,
+                comments, addons, photos, floor_price,
+                lien_holder, lien_payoff_amount, lien_payoff_url
             FROM cars WHERE car_id = %s
         """, (car_id,))
         c = cur.fetchone()
@@ -315,7 +322,10 @@ def get_car(car_id: str):
             "smoked_in": c[20] or False, "overall_condition": c[21] or '',
             "comments": c[22] or '', "addons": c[23] or '',
             "photos": photos or [],
-            "floor_price": float(c[25]) if c[25] else 0
+            "floor_price": float(c[25]) if c[25] else 0,
+            "lien_holder": c[26] or '',
+            "lien_payoff_amount": int(c[27]) if c[27] else 0,
+            "lien_payoff_url": c[28] or '',           
         }
     finally:
         cur.close()
