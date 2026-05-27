@@ -214,11 +214,21 @@ def confirm_pickup(req: PickupConfirmRequest):
             raise HTTPException(status_code=404, detail="Transaction not found")
         if str(row[0]) != req.dealer_id:
             raise HTTPException(status_code=403, detail="Not authorized")
-        new_status = "awaiting_seller_payment_confirm" if req.as_described else "dispute_flagged"
-        cur.execute("UPDATE transactions SET pickup_confirmed=TRUE, pickup_confirmed_at=%s, vehicle_as_described=%s, discrepancy_note=%s, status=%s WHERE transaction_id=%s",
-                    (datetime.utcnow(), req.as_described, req.discrepancy_note, new_status, req.transaction_id))
-        conn.commit()
-        return {"status": new_status}
+        if req.as_described:
+            inspection_deadline = datetime.utcnow() + timedelta(hours=24)
+            cur.execute("""UPDATE transactions SET pickup_confirmed=TRUE, pickup_confirmed_at=%s,
+                vehicle_as_described=TRUE, status='inspection_period',
+                inspection_deadline=%s WHERE transaction_id=%s""",
+                (datetime.utcnow(), inspection_deadline, req.transaction_id))
+            conn.commit()
+            return {"status": "inspection_period", "inspection_deadline": inspection_deadline.isoformat()}
+        else:
+            cur.execute("""UPDATE transactions SET pickup_confirmed=TRUE, pickup_confirmed_at=%s,
+                vehicle_as_described=FALSE, discrepancy_note=%s, status='dispute_flagged'
+                WHERE transaction_id=%s""",
+                (datetime.utcnow(), req.discrepancy_note, req.transaction_id))
+            conn.commit()
+            return {"status": "dispute_flagged"}
     except Exception:
         conn.rollback()
         raise
@@ -241,6 +251,64 @@ def seller_confirm_payment(req: SellerPaymentConfirmRequest):
                     (datetime.utcnow(), req.transaction_id))
         conn.commit()
         return {"status": "awaiting_seller_fee"}
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        cur.close()
+        conn.close()
+
+
+class InspectionRejectRequest(BaseModel):
+    dealer_id: str
+    reason: str
+
+class InspectionAcceptRequest(BaseModel):
+    dealer_id: str
+
+@router.post("/{transaction_id}/inspection/accept")
+def inspection_accept(transaction_id: str, req: InspectionAcceptRequest):
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT dealer_id, inspection_deadline FROM transactions WHERE transaction_id = %s", (transaction_id,))
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Transaction not found")
+        dealer_id, inspection_deadline = row
+        if str(dealer_id) != req.dealer_id:
+            raise HTTPException(status_code=403, detail="Not authorized")
+        if inspection_deadline and datetime.utcnow() > inspection_deadline:
+            # Auto-accept if window expired anyway
+            pass
+        cur.execute("""UPDATE transactions SET status='awaiting_seller_payment_confirm',
+            inspection_accepted_at=%s WHERE transaction_id=%s""",
+            (datetime.utcnow(), transaction_id))
+        conn.commit()
+        return {"status": "awaiting_seller_payment_confirm"}
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        cur.close()
+        conn.close()
+
+@router.post("/{transaction_id}/inspection/reject")
+def inspection_reject(transaction_id: str, req: InspectionRejectRequest):
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT dealer_id FROM transactions WHERE transaction_id = %s", (transaction_id,))
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Transaction not found")
+        if str(row[0]) != req.dealer_id:
+            raise HTTPException(status_code=403, detail="Not authorized")
+        cur.execute("""UPDATE transactions SET status='dispute_flagged',
+            inspection_reject_reason=%s, inspection_rejected_at=%s WHERE transaction_id=%s""",
+            (req.reason, datetime.utcnow(), transaction_id))
+        conn.commit()   
+        return {"status": "dispute_flagged", "reason": req.reason}
     except Exception:
         conn.rollback()
         raise
@@ -331,4 +399,4 @@ def get_transaction(transaction_id: str):
 
 
 
-        #############################working
+        #############################working    
