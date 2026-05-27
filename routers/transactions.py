@@ -127,6 +127,25 @@ def debug_count():
         cur.close()
         conn.close()
 
+@router.get("/admin/disputes")
+def get_disputes():
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT t.*, c.year, c.make, c.model 
+            FROM transactions t
+            LEFT JOIN cars c ON t.car_id = c.car_id
+            WHERE t.status = 'dispute_flagged'
+            ORDER BY t.inspection_rejected_at DESC
+        """)
+        rows = cur.fetchall()
+        cols = [desc[0] for desc in cur.description]
+        return [dict(zip(cols, r)) for r in rows]
+    finally:
+        cur.close()
+        conn.close()
+
 
 # ─────────────────────────────────────────────
 #  POST ROUTES
@@ -262,6 +281,9 @@ def seller_confirm_payment(req: SellerPaymentConfirmRequest):
 class InspectionRejectRequest(BaseModel):
     dealer_id: str
     reason: str
+    category: Optional[str] = None
+    evidence_urls: Optional[list] = None
+
 
 class InspectionAcceptRequest(BaseModel):
     dealer_id: str
@@ -305,8 +327,10 @@ def inspection_reject(transaction_id: str, req: InspectionRejectRequest):
         if str(row[0]) != req.dealer_id:
             raise HTTPException(status_code=403, detail="Not authorized")
         cur.execute("""UPDATE transactions SET status='dispute_flagged',
-            inspection_reject_reason=%s, inspection_rejected_at=%s WHERE transaction_id=%s""",
-            (req.reason, datetime.utcnow(), transaction_id))
+            inspection_reject_reason=%s, inspection_rejected_at=%s,
+            dispute_category=%s, dispute_evidence_urls=%s, dispute_submitted_at=%s
+            WHERE transaction_id=%s""",
+            (req.reason, datetime.utcnow(), req.category, req.evidence_urls, datetime.utcnow(), transaction_id))
         conn.commit()   
         return {"status": "dispute_flagged", "reason": req.reason}
     except Exception:
@@ -315,6 +339,34 @@ def inspection_reject(transaction_id: str, req: InspectionRejectRequest):
     finally:
         cur.close()
         conn.close()
+
+
+class DisputeResolveRequest(BaseModel):
+    decision: str  # 'refund' or 'deny'
+
+@router.post("/{transaction_id}/dispute/resolve")
+def resolve_dispute(transaction_id: str, req: DisputeResolveRequest):
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        if req.decision == 'refund':
+            cur.execute("""UPDATE transactions SET status='dispute_resolved_refund',
+                refund_status='refunded', refund_issued_at=%s WHERE transaction_id=%s""",
+                (datetime.utcnow(), transaction_id))
+        else:
+            cur.execute("""UPDATE transactions SET status='dispute_resolved_denied',
+                refund_status='denied' WHERE transaction_id=%s""",
+                (transaction_id,))
+        conn.commit()
+        return {"status": "resolved", "decision": req.decision}
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        cur.close()
+        conn.close()
+
+
 
 
 # ─────────────────────────────────────────────
@@ -375,6 +427,7 @@ def forfeit_transaction(transaction_id: str):
     finally:
         cur.close()
         conn.close()
+
 
 
 # ─────────────────────────────────────────────
