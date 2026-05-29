@@ -5,6 +5,7 @@ from datetime import datetime
 from database import get_connection
 import json
 from email_utils import send_dealer_new_listing
+import os
 
 
 router = APIRouter(
@@ -158,7 +159,7 @@ async def get_market_value(year: int, make: str, model: str, mileage: int, zip: 
             res = await client.get(
                 "https://mc-api.marketcheck.com/v2/mds/car",
                 params={
-                    "api_key": "DsZpzkPNuZC43EUkD64TJno2YHVm3zSe",
+                    "api_key": os.getenv("MARKETCHECK_API_KEY"),
                     "year": year,
                     "make": make,
                     "model": model,
@@ -323,7 +324,7 @@ async def get_vehicle_history(vin: str):
 @router.get("/{car_id}")
 def get_car(car_id: str):
     conn = get_connection()
-    cur = conn.cursor()
+    cur = conn.cursor() 
     try:
         cur.execute("""
             SELECT car_id, seller_id, year, make, model, mileage, zip,
