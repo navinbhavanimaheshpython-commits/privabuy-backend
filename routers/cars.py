@@ -159,7 +159,7 @@ async def get_market_value(year: int, make: str, model: str, mileage: int, zip: 
             res = await client.get(
                 "https://mc-api.marketcheck.com/v2/mds/car",
                 params={
-                    "api_key": os.getenv("MARKETCHECK_API_KEY"),
+                    "api_key": "mc_live_9V8Uoo3M8B6ntg6dSeiZlAP4zCT0IiF0",
                     "year": year,
                     "make": make,
                     "model": model,
