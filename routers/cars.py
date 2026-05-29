@@ -12,7 +12,7 @@ router = APIRouter(
     tags=["cars"]
 )
 
-class CarListing(BaseModel):
+class CarListing(BaseModel):# these are set by backend, not sent by frontend
     seller_id: str
     year: int
     make: str
@@ -43,7 +43,7 @@ class CarListing(BaseModel):
     lien_payoff_url: str = ''
 
 @router.post("/list-car")
-def list_car(data: CarListing):
+async def list_car(data: CarListing):
     conn = get_connection()
     cur = conn.cursor()
     try:
@@ -90,6 +90,39 @@ def list_car(data: CarListing):
                     data.year, data.make, data.model,
                     data.mileage, data.zip, car_id
                 )
+
+        # VinAudit check
+        vinaudit_accidents = 0
+        if data.vin and len(data.vin) == 17:
+            try:
+                import httpx
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    qr = await client.get("https://api.vinaudit.com/v2/query", params={
+                        "vin": data.vin, "key": "B9L22J3CICYEIGQ",
+                        "user": "navinbhavanimaheshpython@gmail.com",
+                        "pass": "Hanuman@1015", "format": "json", "mode": "prod"
+                    })
+                    qd = qr.json()
+                    if qd.get("success"):
+                        rr = await client.get("https://api.vinaudit.com/v2/pullreport", params={
+                            "id": qd.get("id"), "vin": data.vin, "key": "B9L22J3CICYEIGQ",
+                            "user": "navinbhavanimaheshpython@gmail.com",
+                            "pass": "Hanuman@1015", "format": "json", "mode": "prod"
+                        })
+                        rd = rr.json()
+                        if rd.get("success"):
+                            vinaudit_accidents = len(rd.get("accidents", []))
+            except:
+                pass
+
+        # OR logic: either source showing accident → has_accident = True
+        seller_has_accident = data.accidents != 'None'
+        has_accident = seller_has_accident or (vinaudit_accidents > 0)
+
+        cur.execute("""
+            UPDATE cars SET has_accident = %s, vinaudit_accidents = %s
+            WHERE car_id = %s
+        """, (has_accident, vinaudit_accidents, car_id))
 
         conn.commit()
         return {"status": "ok", "car_id": car_id, "connected_dealers": len(dealers)}
@@ -294,12 +327,13 @@ def get_car(car_id: str):
     try:
         cur.execute("""
             SELECT car_id, seller_id, year, make, model, mileage, zip,
-                condition, created_at, status, vin, title_status,
-                loan_status, trim, color, transmission, drivetrain,
-                keys, accidents, owners, smoked_in, overall_condition,
-                comments, addons, photos, floor_price,
-                lien_holder, lien_payoff_amount, lien_payoff_url
-            FROM cars WHERE car_id = %s
+            condition, created_at, status, vin, title_status,
+            loan_status, trim, color, transmission, drivetrain,
+            keys, accidents, owners, smoked_in, overall_condition,
+            comments, addons, photos, floor_price,
+            lien_holder, lien_payoff_amount, lien_payoff_url,
+            has_accident, vinaudit_accidents
+        FROM cars WHERE car_id = %s
         """, (car_id,))
         c = cur.fetchone()
         if not c:
@@ -326,6 +360,8 @@ def get_car(car_id: str):
             "lien_holder": c[26] or '',
             "lien_payoff_amount": int(c[27]) if c[27] else 0,
             "lien_payoff_url": c[28] or '',           
+            "has_accident": c[29] if len(c) > 29 else False,
+            "vinaudit_accidents": c[30] if len(c) > 30 else 0,
         }
     finally:
         cur.close()
