@@ -99,16 +99,16 @@ async def list_car(data: CarListing):
                 import httpx
                 async with httpx.AsyncClient(timeout=10.0) as client:
                     qr = await client.get("https://api.vinaudit.com/v2/query", params={
-                        "vin": data.vin, "key": "B9L22J3CICYEIGQ",
-                        "user": "navinbhavanimaheshpython@gmail.com",
-                        "pass": "Hanuman@1015", "format": "json", "mode": "prod"
+                        "vin": data.vin, "key": os.getenv("VINAUDIT_KEY"),
+                        "user": os.getenv("VINAUDIT_USER"),
+                        "pass": os.getenv("VINAUDIT_PASS"), "format": "json", "mode": "prod"
                     })
                     qd = qr.json()
                     if qd.get("success"):
                         rr = await client.get("https://api.vinaudit.com/v2/pullreport", params={
-                            "id": qd.get("id"), "vin": data.vin, "key": "B9L22J3CICYEIGQ",
-                            "user": "navinbhavanimaheshpython@gmail.com",
-                            "pass": "Hanuman@1015", "format": "json", "mode": "prod"
+                            "id": qd.get("id"), "vin": data.vin, "key": os.getenv("VINAUDIT_KEY"),
+                            "user": os.getenv("VINAUDIT_USER"),
+                            "pass": os.getenv("VINAUDIT_PASS"), "format": "json", "mode": "prod"
                         })
                         rd = rr.json()
                         if rd.get("success"):
@@ -159,7 +159,7 @@ async def get_market_value(year: int, make: str, model: str, mileage: int, zip: 
             res = await client.get(
                 "https://mc-api.marketcheck.com/v2/mds/car",
                 params={
-                    "api_key": "mc_live_9V8Uoo3M8B6ntg6dSeiZlAP4zCT0IiF0",
+                    "api_key": os.getenv("MARKETCHECK_API_KEY"),
                     "year": year,
                     "make": make,
                     "model": model,
@@ -183,7 +183,7 @@ async def get_market_value(year: int, make: str, model: str, mileage: int, zip: 
             res2 = await client.get(
                 "https://mc-api.marketcheck.com/v2/search/car/active",
                 params={
-                    "api_key": "DsZpzkPNuZC43EUkD64TJno2YHVm3zSe",
+                    "api_key": os.getenv("MARKETCHECK_API_KEY"),
                     "year": year,
                     "make": make.lower(),
                     "model": model.lower(),
@@ -271,9 +271,9 @@ async def get_vehicle_history(vin: str):
                 "https://api.vinaudit.com/v2/query",
                 params={
                     "vin": vin,
-                    "key": "B9L22J3CICYEIGQ",
-                    "user": "navinbhavanimaheshpython@gmail.com",
-                    "pass": "Hanuman@1015",
+                    "key": os.getenv("VINAUDIT_KEY"),
+                    "user": os.getenv("VINAUDIT_USER"),
+                    "pass": os.getenv("VINAUDIT_PASS"),
                     "format": "json",
                     "mode": "prod"
                 }
@@ -290,9 +290,9 @@ async def get_vehicle_history(vin: str):
                 params={
                     "id": report_id,
                     "vin": vin,
-                    "key": "B9L22J3CICYEIGQ",
-                    "user": "navinbhavanimaheshpython@gmail.com",
-                    "pass": "Hanuman@1015",
+                    "key": os.getenv("VINAUDIT_KEY"),
+                    "user": os.getenv("VINAUDIT_USER"),
+                    "pass": os.getenv("VINAUDIT_PASS"),
                     "format": "json",
                     "mode": "prod"
                 }
