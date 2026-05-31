@@ -25,17 +25,17 @@ def submit_offer(data: Offer):
 
     try:
         # 1️⃣ Check dealer permission
-        cur.execute("""
-            SELECT 1
-            FROM dealer_car_connections
-            WHERE dealer_id = %s AND car_id = %s
-        """, (data.dealer_id, data.car_id))
-
-        if cur.fetchone() is None:
-            raise HTTPException(
-                status_code=403,
-                detail="Dealer not authorized to bid on this car"
-            )
+# TEMPORARILY DISABLED - auto-connect not yet implemented
+# cur.execute("""
+#     SELECT 1
+#     FROM dealer_car_connections
+#     WHERE dealer_id = %s AND car_id = %s
+# """, (data.dealer_id, data.car_id))
+# if cur.fetchone() is None:
+#     raise HTTPException(
+#         status_code=403,
+#         detail="Dealer not authorized to bid on this car"
+#     )
 
         # 2️⃣ Check car is open
         cur.execute("""
