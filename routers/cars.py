@@ -151,6 +151,7 @@ def get_active_cars():
     finally:
         cur.close()
         conn.close()
+        
 @router.get("/market-value")
 async def get_market_value(year: int, make: str, model: str, mileage: int, zip: str = "60601"):
     import httpx

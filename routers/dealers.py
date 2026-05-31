@@ -35,6 +35,18 @@ def dealer_register(data: DealerRegister):
             VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,'approved',%s)
         """, (dealer_id, data.dealer_name, data.contact_name, data.phone,
               data.email, data.license_number, data.city, data.state, api_key, datetime.utcnow()))
+        
+        
+        # Auto-connect new dealer to all open cars
+        cur.execute("SELECT car_id FROM cars WHERE status = 'open'")
+        open_cars = cur.fetchall()
+        for car in open_cars:
+            cur.execute("""
+                INSERT INTO dealer_car_connections (id, car_id, dealer_id, created_at)
+                VALUES (gen_random_uuid(), %s, %s, NOW())
+                ON CONFLICT DO NOTHING
+            """, (car[0], dealer_id))
+
         conn.commit()
         send_admin_new_dealer(
             data.dealer_name, data.contact_name,
