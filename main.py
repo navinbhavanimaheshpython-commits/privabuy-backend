@@ -14,6 +14,7 @@ app.add_middleware(
     "https://www.privabuy.com",
     "https://privabuy.vercel.app",
     "http://localhost:5173",
+    "http://localhost:3000",
     ],
     allow_credentials=False,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
