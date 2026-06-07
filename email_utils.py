@@ -1,6 +1,7 @@
 ﻿import resend
 
-resend.api_key = "re_Z8YiTFC9_Fj3vB5a5nhZujaUtWrY4thQm"
+import os
+resend.api_key = os.environ.get("RESEND_API_KEY")
 
 def send_dealer_new_listing(dealer_email: str, dealer_name: str, year: int, make: str, model: str, mileage: int, zip: str, car_id: str):
     try:

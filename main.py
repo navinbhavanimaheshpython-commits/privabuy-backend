@@ -1,14 +1,16 @@
 from dotenv import load_dotenv
 load_dotenv()
+
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from routers import cars, dealers, offers, sellers, payments, transactions
+from routers import cars, dealers, offers, sellers, payments, transactions, invoices
 import os
 
 app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
+<<<<<<< HEAD
     allow_origins=[
     "https://privabuy.com",
     "https://www.privabuy.com",
@@ -16,6 +18,9 @@ app.add_middleware(
     "http://localhost:5173",
     "http://localhost:3000",
     ],
+=======
+    allow_origins=["*"],
+>>>>>>> staging
     allow_credentials=False,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=["*"],
@@ -27,6 +32,7 @@ app.include_router(offers.router)
 app.include_router(sellers.router)
 app.include_router(payments.router)
 app.include_router(transactions.router)
+app.include_router(invoices.router, tags=["invoices"])
 
 @app.get("/")
 def home():
