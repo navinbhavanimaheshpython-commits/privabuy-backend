@@ -168,12 +168,6 @@ async def send_dealer_invoice(txn_id: str, payload: InvoiceRequest):
         cur.execute("SELECT invoice_number FROM invoices WHERE transaction_id = %s", (txn_id,))
         existing = cur.fetchone()
         if existing:
-            cur.execute("""
-                UPDATE transactions SET status = 'awaiting_bill_of_sale'
-                WHERE transaction_id = %s
-            """, (txn_id,))
-            conn.commit()
-            cur.close()
             return {"invoice_number": existing[0], "already_sent": True}
  
         # Generate invoice number
