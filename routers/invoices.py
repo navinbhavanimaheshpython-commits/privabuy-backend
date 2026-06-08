@@ -181,6 +181,12 @@ async def send_dealer_invoice(txn_id: str, payload: InvoiceRequest):
         """, (invoice_number, txn_id, payload.dealer_id, dealer_email,
               dealer_name, vehicle, float(win_price), payload.dealer_fee))
         conn.commit()
+
+        cur.execute("""
+            UPDATE transactions SET status = 'awaiting_bill_of_sale'
+             WHERE transaction_id = %s
+        """, (txn_id,))
+        conn.commit()
  
         # Send email via Resend
         due_date = (datetime.now() + timedelta(days=30)).strftime("%B %d, %Y")
