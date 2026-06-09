@@ -453,11 +453,14 @@ def mark_dealer_paid(transaction_id: str):
         if not row:
             raise HTTPException(status_code=404, detail="Transaction not found")
         status, deadline = row
-        if datetime.utcnow() > deadline:
+        if deadline and datetime.utcnow() > deadline:
             cur.execute("UPDATE transactions SET status='forfeited', forfeited_at=%s WHERE transaction_id=%s", (datetime.utcnow(), transaction_id))
             conn.commit()
             raise HTTPException(status_code=400, detail="24hr deadline expired — bid forfeited")
-        cur.execute("UPDATE transactions SET dealer_fee_paid=TRUE, dealer_paid_at=%s, status='awaiting_bill_of_sale' WHERE transaction_id=%s", (datetime.utcnow(), transaction_id))
+        cur.execute("""UPDATE transactions SET 
+            dealer_fee_paid=TRUE, dealer_paid_at=%s, status='awaiting_bill_of_sale',
+            bill_of_sale_dealer_acked=FALSE, bill_of_sale_seller_acked=FALSE
+            WHERE transaction_id=%s""", (datetime.utcnow(), transaction_id))
         conn.commit()
         return {"status": "awaiting_bill_of_sale"}
     except Exception:
@@ -466,7 +469,7 @@ def mark_dealer_paid(transaction_id: str):
     finally:
         cur.close()
         conn.close()
-
+        
 @router.post("/{transaction_id}/seller-paid")
 def mark_seller_paid(transaction_id: str):
     conn = get_connection()
