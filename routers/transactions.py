@@ -356,13 +356,11 @@ def resolve_dispute(transaction_id: str, req: DisputeResolveRequest):
     cur = conn.cursor()
     try:
         if req.decision == 'refund':
-            cur.execute("""UPDATE transactions SET status='dispute_resolved_refund',
-                refund_status='refunded', refund_issued_at=%s WHERE transaction_id=%s""",
-                (datetime.utcnow(), transaction_id))
+            cur.execute("""UPDATE transactions SET status='awaiting_bill_of_sale'
+                WHERE transaction_id=%s""", (transaction_id,))
         else:
-            cur.execute("""UPDATE transactions SET status='awaiting_seller_payment_confirm',
-                refund_status='denied', dispute_resolved_at=%s WHERE transaction_id=%s""",
-                (datetime.utcnow(), transaction_id))
+            cur.execute("""UPDATE transactions SET status='inspection_period'
+                WHERE transaction_id=%s""", (transaction_id,))
         conn.commit()
         return {"status": "resolved", "decision": req.decision}
     except Exception:
