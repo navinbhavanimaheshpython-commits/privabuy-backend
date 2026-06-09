@@ -469,7 +469,7 @@ def mark_dealer_paid(transaction_id: str):
     finally:
         cur.close()
         conn.close()
-        
+
 @router.post("/{transaction_id}/seller-paid")
 def mark_seller_paid(transaction_id: str):
     conn = get_connection()
@@ -502,6 +502,31 @@ def forfeit_transaction(transaction_id: str):
         conn.close()
 
 
+@router.post("/admin/repair-stuck/{transaction_id}")
+def repair_stuck_transaction(transaction_id: str):
+    """Auto-advance any transaction where both parties have signed but status didn't advance."""
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("""SELECT status, bill_of_sale_dealer_acked, bill_of_sale_seller_acked 
+                       FROM transactions WHERE transaction_id=%s""", (transaction_id,))
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(404, "Transaction not found")
+        status, d_acked, s_acked = row
+        if status == 'awaiting_bill_of_sale' and d_acked and s_acked:
+            cur.execute("""UPDATE transactions SET status='awaiting_pickup_schedule' 
+                           WHERE transaction_id=%s""", (transaction_id,))
+            conn.commit()
+            return {"repaired": True, "new_status": "awaiting_pickup_schedule"}
+        return {"repaired": False, "status": status, "dealer_acked": d_acked, "seller_acked": s_acked}
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        cur.close()
+        conn.close()
+        
 
 # ─────────────────────────────────────────────
 #  WILDCARD GET — must be absolute last
