@@ -47,19 +47,22 @@ def create_transaction_record(cur, offer_id: str, car_id: str,
                                dealer_id: str, seller_id: str, amount: float):
     transaction_id = str(uuid.uuid4())
     deadline = datetime.utcnow() + timedelta(hours=24)
+    cur.execute("SELECT has_accident FROM cars WHERE car_id = %s", (car_id,))
+    car_row = cur.fetchone()
+    has_accident = bool(car_row[0]) if car_row and car_row[0] is not None else False
     cur.execute("""
         INSERT INTO transactions (
             transaction_id, offer_id, car_id, dealer_id, seller_id,
             amount, status, dealer_payment_deadline,
             dealer_fee_paid, seller_fee_paid,
             bill_of_sale_dealer_acked, bill_of_sale_seller_acked,
-            created_at
-        ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            has_accident, created_at
+        ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
     """, (
         transaction_id, offer_id, car_id, dealer_id, seller_id,
         amount, "awaiting_dealer_payment", deadline,
         False, False, False, False,
-        datetime.utcnow()
+        has_accident, datetime.utcnow()
     ))
     return transaction_id
 
@@ -133,11 +136,15 @@ def get_disputes():
     cur = conn.cursor()
     try:
         cur.execute("""
-            SELECT t.*, c.year, c.make, c.model 
+            SELECT t.transaction_id, t.status, t.amount,
+                   t.dispute_category, t.inspection_reject_reason,
+                   t.dispute_evidence_urls, t.dispute_submitted_at,
+                   t.inspection_rejected_at,
+                   c.year, c.make, c.model
             FROM transactions t
-            LEFT JOIN cars c ON t.car_id = c.car_id
+            LEFT JOIN cars c ON c.car_id::text = t.car_id::text
             WHERE t.status = 'dispute_flagged'
-            ORDER BY t.inspection_rejected_at DESC
+            ORDER BY t.inspection_rejected_at DESC NULLS LAST
         """)
         rows = cur.fetchall()
         cols = [desc[0] for desc in cur.description]
@@ -145,7 +152,6 @@ def get_disputes():
     finally:
         cur.close()
         conn.close()
-
 
 # ─────────────────────────────────────────────
 #  POST ROUTES
@@ -266,10 +272,10 @@ def seller_confirm_payment(req: SellerPaymentConfirmRequest):
             raise HTTPException(status_code=404, detail="Transaction not found")
         if str(row[0]) != req.seller_id:
             raise HTTPException(status_code=403, detail="Not authorized")
-        cur.execute("UPDATE transactions SET seller_payment_confirmed=TRUE, seller_payment_confirmed_at=%s, status='awaiting_seller_fee' WHERE transaction_id=%s",
-                    (datetime.utcnow(), req.transaction_id))
+        cur.execute("UPDATE transactions SET seller_payment_confirmed=TRUE, seller_payment_confirmed_at=%s, status='completed', completed_at=%s WHERE transaction_id=%s",
+                    (datetime.utcnow(), datetime.utcnow(), req.transaction_id))
         conn.commit()
-        return {"status": "awaiting_seller_fee"}
+        return {"status": "completed"}
     except Exception:
         conn.rollback()
         raise
