@@ -163,51 +163,26 @@ def acknowledge_bill_of_sale(req: BillOfSaleAckRequest):
     cur = conn.cursor()
     try:
         if req.party == "dealer":
-            cur.execute("UPDATE transactions SET bill_of_sale_dealer_acked = TRUE, dealer_acked_at = %s WHERE transaction_id = %s", (datetime.utcnow(), req.transaction_id))
-        elif req.party == "seller":
-            cur.execute("UPDATE transactions SET bill_of_sale_seller_acked = TRUE, seller_acked_at = %s WHERE transaction_id = %s", (datetime.utcnow(), req.transaction_id))
-        else:
-            raise HTTPException(status_code=400, detail="party must be 'dealer' or 'seller'")
-        cur.execute("SELECT bill_of_sale_dealer_acked, bill_of_sale_seller_acked FROM transactions WHERE transaction_id = %s", (req.transaction_id,))
-        dealer_acked, seller_acked = cur.fetchone()
-        if dealer_acked and seller_acked:
-            cur.execute("UPDATE transactions SET status = 'awaiting_pickup_schedule' WHERE transaction_id = %s", (req.transaction_id,))
-            conn.commit()
-            return {"status": "awaiting_pickup_schedule", "both_acked": True}
-        conn.commit()
-        waiting_on = "seller" if req.party == "dealer" else "dealer"
-        return {"status": "awaiting_bill_of_sale", "both_acked": False, "waiting_on": waiting_on}
-    except Exception:
-        conn.rollback()
-        raise
-    finally:
-        cur.close()
-        conn.close()@router.post("/bill-of-sale/acknowledge")
-def acknowledge_bill_of_sale(req: BillOfSaleAckRequest):
-    conn = get_connection()
-    cur = conn.cursor()
-    try:
-        if req.party == "dealer":
             cur.execute("""UPDATE transactions 
-                SET bill_of_sale_dealer_acked = TRUE, dealer_acked_at = %s 
-                WHERE transaction_id = %s""", (datetime.utcnow(), req.transaction_id))
+                SET bill_of_sale_dealer_acked=TRUE, dealer_acked_at=%s 
+                WHERE transaction_id=%s""", (datetime.utcnow(), req.transaction_id))
         elif req.party == "seller":
             cur.execute("""UPDATE transactions 
-                SET bill_of_sale_seller_acked = TRUE, seller_acked_at = %s 
-                WHERE transaction_id = %s""", (datetime.utcnow(), req.transaction_id))
+                SET bill_of_sale_seller_acked=TRUE, seller_acked_at=%s 
+                WHERE transaction_id=%s""", (datetime.utcnow(), req.transaction_id))
         else:
             raise HTTPException(status_code=400, detail="party must be 'dealer' or 'seller'")
 
-        # Always re-check both — handles race conditions and out-of-order acks
+        # Always re-read both flags after writing — prevents race condition
         cur.execute("""SELECT bill_of_sale_dealer_acked, bill_of_sale_seller_acked 
-                       FROM transactions WHERE transaction_id = %s""", (req.transaction_id,))
+                       FROM transactions WHERE transaction_id=%s""", (req.transaction_id,))
         dealer_acked, seller_acked = cur.fetchone()
 
         if dealer_acked and seller_acked:
+            # Guard: only advance if still at bill_of_sale stage
             cur.execute("""UPDATE transactions 
-                SET status = 'awaiting_pickup_schedule' 
-                WHERE transaction_id = %s 
-                  AND status = 'awaiting_bill_of_sale'""",  # ← guard: only advance if still at this stage
+                SET status='awaiting_pickup_schedule'
+                WHERE transaction_id=%s AND status='awaiting_bill_of_sale'""",
                 (req.transaction_id,))
             conn.commit()
             return {"status": "awaiting_pickup_schedule", "both_acked": True}
@@ -526,7 +501,7 @@ def repair_stuck_transaction(transaction_id: str):
     finally:
         cur.close()
         conn.close()
-        
+
 
 # ─────────────────────────────────────────────
 #  WILDCARD GET — must be absolute last
