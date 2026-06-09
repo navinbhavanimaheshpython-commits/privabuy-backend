@@ -182,6 +182,44 @@ def acknowledge_bill_of_sale(req: BillOfSaleAckRequest):
         raise
     finally:
         cur.close()
+        conn.close()@router.post("/bill-of-sale/acknowledge")
+def acknowledge_bill_of_sale(req: BillOfSaleAckRequest):
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        if req.party == "dealer":
+            cur.execute("""UPDATE transactions 
+                SET bill_of_sale_dealer_acked = TRUE, dealer_acked_at = %s 
+                WHERE transaction_id = %s""", (datetime.utcnow(), req.transaction_id))
+        elif req.party == "seller":
+            cur.execute("""UPDATE transactions 
+                SET bill_of_sale_seller_acked = TRUE, seller_acked_at = %s 
+                WHERE transaction_id = %s""", (datetime.utcnow(), req.transaction_id))
+        else:
+            raise HTTPException(status_code=400, detail="party must be 'dealer' or 'seller'")
+
+        # Always re-check both — handles race conditions and out-of-order acks
+        cur.execute("""SELECT bill_of_sale_dealer_acked, bill_of_sale_seller_acked 
+                       FROM transactions WHERE transaction_id = %s""", (req.transaction_id,))
+        dealer_acked, seller_acked = cur.fetchone()
+
+        if dealer_acked and seller_acked:
+            cur.execute("""UPDATE transactions 
+                SET status = 'awaiting_pickup_schedule' 
+                WHERE transaction_id = %s 
+                  AND status = 'awaiting_bill_of_sale'""",  # ← guard: only advance if still at this stage
+                (req.transaction_id,))
+            conn.commit()
+            return {"status": "awaiting_pickup_schedule", "both_acked": True}
+
+        conn.commit()
+        waiting_on = "seller" if req.party == "dealer" else "dealer"
+        return {"status": "awaiting_bill_of_sale", "both_acked": False, "waiting_on": waiting_on}
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        cur.close()
         conn.close()
 
 @router.post("/pickup/propose-slots")
@@ -362,14 +400,35 @@ def resolve_dispute(transaction_id: str, req: DisputeResolveRequest):
     conn = get_connection()
     cur = conn.cursor()
     try:
-        if req.decision == 'refund':
-            cur.execute("""UPDATE transactions SET status='awaiting_bill_of_sale'
-                WHERE transaction_id=%s""", (transaction_id,))
+        cur.execute(
+            "SELECT pre_dispute_status FROM transactions WHERE transaction_id = %s",
+            (transaction_id,)
+        )
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Transaction not found")
+
+        pre_dispute_status = row[0] or "awaiting_dealer_payment"
+
+        if req.decision == "refund":
+            cur.execute(
+                "UPDATE transactions SET status='dispute_resolved_refund', resolved_at=%s WHERE transaction_id=%s",
+                (datetime.utcnow(), transaction_id)
+            )
+            new_status = "dispute_resolved_refund"
         else:
-            cur.execute("""UPDATE transactions SET status='inspection_period'
-                WHERE transaction_id=%s""", (transaction_id,))
+            cur.execute(
+                """UPDATE transactions SET
+                    status='dispute_resolved_denied',
+                    resume_status=%s,
+                    resolved_at=%s
+                WHERE transaction_id=%s""",
+                (pre_dispute_status, datetime.utcnow(), transaction_id)
+            )
+            new_status = "dispute_resolved_denied"
+
         conn.commit()
-        return {"status": "resolved", "decision": req.decision}
+        return {"status": new_status, "decision": req.decision, "resumed_at": pre_dispute_status}
     except Exception:
         conn.rollback()
         raise
