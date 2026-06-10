@@ -252,9 +252,11 @@ def acknowledge_bill_of_sale(req: BillOfSaleAckRequest):
             )
 
         return {"status": "awaiting_bill_of_sale", "both_acked": False, "waiting_on": waiting_on}
-    except Exception:
+    except Exception as e:
         conn.rollback()
-        raise
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
     finally:
         cur.close()
         conn.close()
