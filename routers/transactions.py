@@ -4,9 +4,33 @@ from typing import Optional
 from datetime import datetime, timedelta
 import uuid
 from database import get_connection
+from email_utils import (
+    send_dealer_bid_accepted,
+    send_seller_bid_accepted_confirmation,
+    send_seller_dealer_paid_fee,
+    send_dealer_seller_signed_bos,
+    send_seller_dealer_signed_bos,
+    send_seller_pickup_slots_proposed,
+    send_dealer_pickup_confirmed,
+    send_seller_pickup_confirmed,
+    send_seller_vehicle_confirmed,
+    send_deal_complete,
+    send_admin_dispute_filed,
+)
 
 
 router = APIRouter(prefix="/transactions", tags=["transactions"])
+
+# ─────────────────────────────────────────────
+#  SLOT FORMATTER — used by pickup endpoints
+# ─────────────────────────────────────────────
+
+def fmt_slot(slot_str: str) -> str:
+    try:
+        return datetime.fromisoformat(slot_str).strftime("%A, %B %-d at %-I:%M %p")
+    except Exception:
+        return slot_str
+
 
 # ─────────────────────────────────────────────
 #  MODELS
@@ -153,6 +177,7 @@ def get_disputes():
         cur.close()
         conn.close()
 
+
 # ─────────────────────────────────────────────
 #  POST ROUTES
 # ─────────────────────────────────────────────
@@ -173,10 +198,26 @@ def acknowledge_bill_of_sale(req: BillOfSaleAckRequest):
         else:
             raise HTTPException(status_code=400, detail="party must be 'dealer' or 'seller'")
 
-        # Always re-read both flags after writing — prevents race condition
-        cur.execute("""SELECT bill_of_sale_dealer_acked, bill_of_sale_seller_acked 
-                       FROM transactions WHERE transaction_id=%s""", (req.transaction_id,))
-        dealer_acked, seller_acked = cur.fetchone()
+        # Re-read both flags after writing — prevents race condition
+        cur.execute("""
+            SELECT t.bill_of_sale_dealer_acked, t.bill_of_sale_seller_acked,
+                   t.car_id, t.dealer_id, t.seller_id,
+                   c.year, c.make, c.model
+            FROM transactions t
+            LEFT JOIN cars c ON c.car_id::text = t.car_id::text
+            WHERE t.transaction_id = %s
+        """, (req.transaction_id,))
+        row = cur.fetchone()
+        dealer_acked, seller_acked, car_id, dealer_id, seller_id, year, make, model = row
+
+        # Fetch emails for notifications
+        cur.execute("SELECT email, dealer_name FROM dealers WHERE dealer_id = %s", (dealer_id,))
+        d = cur.fetchone()
+        dealer_email, dealer_name = (d[0], d[1]) if d else ("", "Dealer")
+
+        cur.execute("SELECT email, name FROM sellers WHERE seller_id = %s", (seller_id,))
+        s = cur.fetchone()
+        seller_email, seller_name = (s[0], s[1]) if s else ("", "Seller")
 
         if dealer_acked and seller_acked:
             # Guard: only advance if still at bill_of_sale stage
@@ -185,10 +226,31 @@ def acknowledge_bill_of_sale(req: BillOfSaleAckRequest):
                 WHERE transaction_id=%s AND status='awaiting_bill_of_sale'""",
                 (req.transaction_id,))
             conn.commit()
+
+            # Both signed — notify dealer to propose slots
+            send_seller_dealer_signed_bos(
+                seller_email=seller_email, seller_name=seller_name,
+                year=year, make=make, model=model
+            )
             return {"status": "awaiting_pickup_schedule", "both_acked": True}
 
         conn.commit()
         waiting_on = "seller" if req.party == "dealer" else "dealer"
+
+        # One party signed — notify the other
+        if req.party == "dealer":
+            # Dealer just signed → notify seller to sign
+            send_dealer_seller_signed_bos(
+                seller_email=seller_email, seller_name=seller_name,
+                year=year, make=make, model=model
+            )
+        else:
+            # Seller just signed → notify dealer to sign
+            send_dealer_seller_signed_bos(
+                dealer_email=dealer_email, dealer_name=dealer_name,
+                year=year, make=make, model=model
+            )
+
         return {"status": "awaiting_bill_of_sale", "both_acked": False, "waiting_on": waiting_on}
     except Exception:
         conn.rollback()
@@ -197,20 +259,44 @@ def acknowledge_bill_of_sale(req: BillOfSaleAckRequest):
         cur.close()
         conn.close()
 
+
 @router.post("/pickup/propose-slots")
 def propose_pickup_slots(req: ProposeTimeSlotsRequest):
     conn = get_connection()
     cur = conn.cursor()
     try:
-        cur.execute("SELECT dealer_id FROM transactions WHERE transaction_id = %s", (req.transaction_id,))
+        cur.execute("""
+            SELECT t.dealer_id, t.seller_id, c.year, c.make, c.model,
+                   s.email, s.name
+            FROM transactions t
+            LEFT JOIN cars c ON c.car_id::text = t.car_id::text
+            LEFT JOIN sellers s ON s.seller_id::text = t.seller_id::text
+            WHERE t.transaction_id = %s
+        """, (req.transaction_id,))
         row = cur.fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Transaction not found")
-        if str(row[0]) != req.dealer_id:
+        dealer_id, seller_id, year, make, model, seller_email, seller_name = row
+        if str(dealer_id) != req.dealer_id:
             raise HTTPException(status_code=403, detail="Not authorized")
-        cur.execute("UPDATE transactions SET pickup_slot_1=%s, pickup_slot_2=%s, pickup_slot_3=%s, slots_proposed_at=%s, status='awaiting_slot_confirmation' WHERE transaction_id=%s",
-                    (req.slot_1, req.slot_2, req.slot_3, datetime.utcnow(), req.transaction_id))
+
+        cur.execute("""UPDATE transactions 
+            SET pickup_slot_1=%s, pickup_slot_2=%s, pickup_slot_3=%s,
+                slots_proposed_at=%s, status='awaiting_slot_confirmation'
+            WHERE transaction_id=%s""",
+            (req.slot_1, req.slot_2, req.slot_3, datetime.utcnow(), req.transaction_id))
         conn.commit()
+
+        # Notify seller to choose a time
+        send_seller_pickup_slots_proposed(
+            seller_email=seller_email or "",
+            seller_name=seller_name or "Seller",
+            year=year, make=make, model=model,
+            slot_1=fmt_slot(req.slot_1),
+            slot_2=fmt_slot(req.slot_2),
+            slot_3=fmt_slot(req.slot_3),
+        )
+
         return {"status": "awaiting_slot_confirmation"}
     except Exception:
         conn.rollback()
@@ -219,20 +305,51 @@ def propose_pickup_slots(req: ProposeTimeSlotsRequest):
         cur.close()
         conn.close()
 
+
 @router.post("/pickup/confirm-slot")
 def confirm_pickup_slot(req: ConfirmSlotRequest):
     conn = get_connection()
     cur = conn.cursor()
     try:
-        cur.execute("SELECT seller_id FROM transactions WHERE transaction_id = %s", (req.transaction_id,))
+        cur.execute("""
+            SELECT t.seller_id, t.dealer_id, c.year, c.make, c.model,
+                   s.email, s.name,
+                   d.email, d.dealer_name
+            FROM transactions t
+            LEFT JOIN cars c ON c.car_id::text = t.car_id::text
+            LEFT JOIN sellers s ON s.seller_id::text = t.seller_id::text
+            LEFT JOIN dealers d ON d.dealer_id::text = t.dealer_id::text
+            WHERE t.transaction_id = %s
+        """, (req.transaction_id,))
         row = cur.fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Transaction not found")
-        if str(row[0]) != req.seller_id:
+        seller_id, dealer_id, year, make, model, seller_email, seller_name, dealer_email, dealer_name = row
+        if str(seller_id) != req.seller_id:
             raise HTTPException(status_code=403, detail="Not authorized")
-        cur.execute("UPDATE transactions SET confirmed_pickup_slot=%s, slot_confirmed_at=%s, status='pickup_scheduled' WHERE transaction_id=%s",
-                    (req.chosen_slot, datetime.utcnow(), req.transaction_id))
+
+        cur.execute("""UPDATE transactions 
+            SET confirmed_pickup_slot=%s, slot_confirmed_at=%s, status='pickup_scheduled'
+            WHERE transaction_id=%s""",
+            (req.chosen_slot, datetime.utcnow(), req.transaction_id))
         conn.commit()
+
+        pickup_formatted = fmt_slot(req.chosen_slot)
+
+        # Notify both parties of confirmed pickup time
+        send_dealer_pickup_confirmed(
+            dealer_email=dealer_email or "",
+            dealer_name=dealer_name or "Dealer",
+            year=year, make=make, model=model,
+            pickup_time=pickup_formatted,
+        )
+        send_seller_pickup_confirmed(
+            seller_email=seller_email or "",
+            seller_name=seller_name or "Seller",
+            year=year, make=make, model=model,
+            pickup_time=pickup_formatted,
+        )
+
         return {"status": "pickup_scheduled", "pickup_time": req.chosen_slot}
     except Exception:
         conn.rollback()
@@ -240,6 +357,7 @@ def confirm_pickup_slot(req: ConfirmSlotRequest):
     finally:
         cur.close()
         conn.close()
+
 
 @router.post("/pickup/confirm")
 def confirm_pickup(req: PickupConfirmRequest):
@@ -274,20 +392,47 @@ def confirm_pickup(req: PickupConfirmRequest):
         cur.close()
         conn.close()
 
+
 @router.post("/seller/confirm-payment-received")
 def seller_confirm_payment(req: SellerPaymentConfirmRequest):
     conn = get_connection()
     cur = conn.cursor()
     try:
-        cur.execute("SELECT seller_id FROM transactions WHERE transaction_id = %s", (req.transaction_id,))
+        cur.execute("""
+            SELECT t.seller_id, t.dealer_id, t.amount,
+                   c.year, c.make, c.model,
+                   s.email, s.name,
+                   d.email, d.dealer_name
+            FROM transactions t
+            LEFT JOIN cars c ON c.car_id::text = t.car_id::text
+            LEFT JOIN sellers s ON s.seller_id::text = t.seller_id::text
+            LEFT JOIN dealers d ON d.dealer_id::text = t.dealer_id::text
+            WHERE t.transaction_id = %s
+        """, (req.transaction_id,))
         row = cur.fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Transaction not found")
-        if str(row[0]) != req.seller_id:
+        seller_id, dealer_id, amount, year, make, model, seller_email, seller_name, dealer_email, dealer_name = row
+        if str(seller_id) != req.seller_id:
             raise HTTPException(status_code=403, detail="Not authorized")
-        cur.execute("UPDATE transactions SET seller_payment_confirmed=TRUE, seller_payment_confirmed_at=%s, status='completed', completed_at=%s WHERE transaction_id=%s",
-                    (datetime.utcnow(), datetime.utcnow(), req.transaction_id))
+
+        cur.execute("""UPDATE transactions 
+            SET seller_payment_confirmed=TRUE, seller_payment_confirmed_at=%s,
+                status='completed', completed_at=%s
+            WHERE transaction_id=%s""",
+            (datetime.utcnow(), datetime.utcnow(), req.transaction_id))
         conn.commit()
+
+        # Notify both parties deal is done
+        send_deal_complete(
+            seller_email=seller_email or "",
+            seller_name=seller_name or "Seller",
+            dealer_email=dealer_email or "",
+            dealer_name=dealer_name or "Dealer",
+            year=year, make=make, model=model,
+            amount=float(amount),
+        )
+
         return {"status": "completed"}
     except Exception:
         conn.rollback()
@@ -307,25 +452,42 @@ class InspectionRejectRequest(BaseModel):
 class InspectionAcceptRequest(BaseModel):
     dealer_id: str
 
+
 @router.post("/{transaction_id}/inspection/accept")
 def inspection_accept(transaction_id: str, req: InspectionAcceptRequest):
     conn = get_connection()
     cur = conn.cursor()
     try:
-        cur.execute("SELECT dealer_id, inspection_deadline FROM transactions WHERE transaction_id = %s", (transaction_id,))
+        cur.execute("""
+            SELECT t.dealer_id, t.seller_id, t.amount, t.inspection_deadline,
+                   c.year, c.make, c.model,
+                   s.email, s.name
+            FROM transactions t
+            LEFT JOIN cars c ON c.car_id::text = t.car_id::text
+            LEFT JOIN sellers s ON s.seller_id::text = t.seller_id::text
+            WHERE t.transaction_id = %s
+        """, (transaction_id,))
         row = cur.fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Transaction not found")
-        dealer_id, inspection_deadline = row
+        dealer_id, seller_id, amount, inspection_deadline, year, make, model, seller_email, seller_name = row
         if str(dealer_id) != req.dealer_id:
             raise HTTPException(status_code=403, detail="Not authorized")
-        if inspection_deadline and datetime.utcnow() > inspection_deadline:
-            # Auto-accept if window expired anyway
-            pass
-        cur.execute("""UPDATE transactions SET status='awaiting_seller_payment_confirm',
-            inspection_accepted_at=%s WHERE transaction_id=%s""",
+
+        cur.execute("""UPDATE transactions 
+            SET status='awaiting_seller_payment_confirm', inspection_accepted_at=%s
+            WHERE transaction_id=%s""",
             (datetime.utcnow(), transaction_id))
         conn.commit()
+
+        # Notify seller to confirm payment
+        send_seller_vehicle_confirmed(
+            seller_email=seller_email or "",
+            seller_name=seller_name or "Seller",
+            year=year, make=make, model=model,
+            amount=float(amount),
+        )
+
         return {"status": "awaiting_seller_payment_confirm"}
     except Exception:
         conn.rollback()
@@ -334,18 +496,29 @@ def inspection_accept(transaction_id: str, req: InspectionAcceptRequest):
         cur.close()
         conn.close()
 
+
 @router.post("/{transaction_id}/inspection/reject")
 def inspection_reject(transaction_id: str, req: InspectionRejectRequest):
     conn = get_connection()
     cur = conn.cursor()
     try:
-        cur.execute("SELECT dealer_id, status FROM transactions WHERE transaction_id = %s", (transaction_id,))
+        cur.execute("""
+            SELECT t.dealer_id, t.seller_id, t.status,
+                   c.year, c.make, c.model,
+                   d.email, s.email
+            FROM transactions t
+            LEFT JOIN cars c ON c.car_id::text = t.car_id::text
+            LEFT JOIN dealers d ON d.dealer_id::text = t.dealer_id::text
+            LEFT JOIN sellers s ON s.seller_id::text = t.seller_id::text
+            WHERE t.transaction_id = %s
+        """, (transaction_id,))
         row = cur.fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Transaction not found")
-        if str(row[0]) != req.dealer_id:
+        dealer_id, seller_id, pre_dispute_status, year, make, model, dealer_email, seller_email = row
+        if str(dealer_id) != req.dealer_id:
             raise HTTPException(status_code=403, detail="Not authorized")
-        pre_dispute_status = row[1]  # ← save current status before overwriting
+
         cur.execute("""UPDATE transactions SET
             status='dispute_flagged',
             pre_dispute_status=%s,
@@ -358,6 +531,15 @@ def inspection_reject(transaction_id: str, req: InspectionRejectRequest):
             (pre_dispute_status, req.reason, datetime.utcnow(),
              req.category, req.evidence_urls, datetime.utcnow(), transaction_id))
         conn.commit()
+
+        # Notify admin of dispute
+        send_admin_dispute_filed(
+            txn_id=transaction_id,
+            year=year, make=make, model=model,
+            dealer_email=dealer_email or "",
+            seller_email=seller_email or "",
+        )
+
         return {"status": "dispute_flagged", "reason": req.reason}
     except Exception:
         conn.rollback()
@@ -369,6 +551,7 @@ def inspection_reject(transaction_id: str, req: InspectionRejectRequest):
 
 class DisputeResolveRequest(BaseModel):
     decision: str  # 'refund' or 'deny'
+
 
 @router.post("/{transaction_id}/dispute/resolve")
 def resolve_dispute(transaction_id: str, req: DisputeResolveRequest):
@@ -412,8 +595,6 @@ def resolve_dispute(transaction_id: str, req: DisputeResolveRequest):
         conn.close()
 
 
-
-
 # ─────────────────────────────────────────────
 #  WILDCARD POST ROUTES
 # ─────────────────────────────────────────────
@@ -423,20 +604,39 @@ def mark_dealer_paid(transaction_id: str):
     conn = get_connection()
     cur = conn.cursor()
     try:
-        cur.execute("SELECT status, dealer_payment_deadline FROM transactions WHERE transaction_id = %s", (transaction_id,))
+        cur.execute("""
+            SELECT t.status, t.dealer_payment_deadline, t.seller_id,
+                   c.year, c.make, c.model,
+                   s.email, s.name
+            FROM transactions t
+            LEFT JOIN cars c ON c.car_id::text = t.car_id::text
+            LEFT JOIN sellers s ON s.seller_id::text = t.seller_id::text
+            WHERE t.transaction_id = %s
+        """, (transaction_id,))
         row = cur.fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Transaction not found")
-        status, deadline = row
+        status, deadline, seller_id, year, make, model, seller_email, seller_name = row
+
         if deadline and datetime.utcnow() > deadline:
-            cur.execute("UPDATE transactions SET status='forfeited', forfeited_at=%s WHERE transaction_id=%s", (datetime.utcnow(), transaction_id))
+            cur.execute("UPDATE transactions SET status='forfeited', forfeited_at=%s WHERE transaction_id=%s",
+                        (datetime.utcnow(), transaction_id))
             conn.commit()
             raise HTTPException(status_code=400, detail="24hr deadline expired — bid forfeited")
+
         cur.execute("""UPDATE transactions SET 
             dealer_fee_paid=TRUE, dealer_paid_at=%s, status='awaiting_bill_of_sale',
             bill_of_sale_dealer_acked=FALSE, bill_of_sale_seller_acked=FALSE
             WHERE transaction_id=%s""", (datetime.utcnow(), transaction_id))
         conn.commit()
+
+        # Notify seller to sign Bill of Sale
+        send_seller_dealer_paid_fee(
+            seller_email=seller_email or "",
+            seller_name=seller_name or "Seller",
+            year=year, make=make, model=model,
+        )
+
         return {"status": "awaiting_bill_of_sale"}
     except Exception:
         conn.rollback()
@@ -444,6 +644,7 @@ def mark_dealer_paid(transaction_id: str):
     finally:
         cur.close()
         conn.close()
+
 
 @router.post("/{transaction_id}/seller-paid")
 def mark_seller_paid(transaction_id: str):
@@ -461,12 +662,14 @@ def mark_seller_paid(transaction_id: str):
         cur.close()
         conn.close()
 
+
 @router.post("/{transaction_id}/forfeit")
 def forfeit_transaction(transaction_id: str):
     conn = get_connection()
     cur = conn.cursor()
     try:
-        cur.execute("UPDATE transactions SET status='forfeited', forfeited_at=%s WHERE transaction_id=%s", (datetime.utcnow(), transaction_id))
+        cur.execute("UPDATE transactions SET status='forfeited', forfeited_at=%s WHERE transaction_id=%s",
+                    (datetime.utcnow(), transaction_id))
         conn.commit()
         return {"status": "forfeited"}
     except Exception:
@@ -521,8 +724,3 @@ def get_transaction(transaction_id: str):
     finally:
         cur.close()
         conn.close()
-
-
-
-
-        #############################working    
