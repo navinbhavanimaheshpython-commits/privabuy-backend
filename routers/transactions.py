@@ -211,11 +211,11 @@ def acknowledge_bill_of_sale(req: BillOfSaleAckRequest):
         dealer_acked, seller_acked, car_id, dealer_id, seller_id, year, make, model = row
 
         # Fetch emails for notifications
-        cur.execute("SELECT email, dealer_name FROM dealers WHERE dealer_id = %s", (dealer_id,))
+        cur.execute("SELECT email, dealer_name FROM dealers WHERE id = %s", (dealer_id,))
         d = cur.fetchone()
         dealer_email, dealer_name = (d[0], d[1]) if d else ("", "Dealer")
 
-        cur.execute("SELECT email, name FROM sellers WHERE seller_id = %s", (seller_id,))
+        cur.execute("SELECT email, name FROM sellers WHERE id = %s", (seller_id,))
         s = cur.fetchone()
         seller_email, seller_name = (s[0], s[1]) if s else ("", "Seller")
 
@@ -319,8 +319,8 @@ def confirm_pickup_slot(req: ConfirmSlotRequest):
                    d.email, d.dealer_name
             FROM transactions t
             LEFT JOIN cars c ON c.car_id::text = t.car_id::text
-            LEFT JOIN sellers s ON s.seller_id::text = t.seller_id::text
-            LEFT JOIN dealers d ON d.dealer_id::text = t.dealer_id::text
+            LEFT JOIN sellers s ON s.id::text = t.seller_id::text
+            LEFT JOIN dealers d ON d.id::text = t.dealer_id::text
             WHERE t.transaction_id = %s
         """, (req.transaction_id,))
         row = cur.fetchone()
@@ -407,8 +407,8 @@ def seller_confirm_payment(req: SellerPaymentConfirmRequest):
                    d.email, d.dealer_name
             FROM transactions t
             LEFT JOIN cars c ON c.car_id::text = t.car_id::text
-            LEFT JOIN sellers s ON s.seller_id::text = t.seller_id::text
-            LEFT JOIN dealers d ON d.dealer_id::text = t.dealer_id::text
+            LEFT JOIN sellers s ON s.id::text = t.seller_id::text
+            LEFT JOIN dealers d ON d.id::text = t.dealer_id::text
             WHERE t.transaction_id = %s
         """, (req.transaction_id,))
         row = cur.fetchone()
@@ -466,7 +466,7 @@ def inspection_accept(transaction_id: str, req: InspectionAcceptRequest):
                    s.email, s.name
             FROM transactions t
             LEFT JOIN cars c ON c.car_id::text = t.car_id::text
-            LEFT JOIN sellers s ON s.seller_id::text = t.seller_id::text
+            LEFT JOIN sellers s ON s.id::text = t.seller_id::text
             WHERE t.transaction_id = %s
         """, (transaction_id,))
         row = cur.fetchone()
@@ -510,8 +510,8 @@ def inspection_reject(transaction_id: str, req: InspectionRejectRequest):
                    d.email, s.email
             FROM transactions t
             LEFT JOIN cars c ON c.car_id::text = t.car_id::text
-            LEFT JOIN dealers d ON d.dealer_id::text = t.dealer_id::text
-            LEFT JOIN sellers s ON s.seller_id::text = t.seller_id::text
+            LEFT JOIN dealers d ON d.id::text = t.dealer_id::text
+            LEFT JOIN sellers s ON s.id::text = t.seller_id::text
             WHERE t.transaction_id = %s
         """, (transaction_id,))
         row = cur.fetchone()
@@ -612,7 +612,7 @@ def mark_dealer_paid(transaction_id: str):
                    s.email, s.name
             FROM transactions t
             LEFT JOIN cars c ON c.car_id::text = t.car_id::text
-            LEFT JOIN sellers s ON s.seller_id::text = t.seller_id::text
+            LEFT JOIN sellers s ON s.id::text = t.seller_id::text
             WHERE t.transaction_id = %s
         """, (transaction_id,))
         row = cur.fetchone()
