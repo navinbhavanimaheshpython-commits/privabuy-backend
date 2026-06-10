@@ -272,7 +272,7 @@ def propose_pickup_slots(req: ProposeTimeSlotsRequest):
                    s.email, s.name
             FROM transactions t
             LEFT JOIN cars c ON c.car_id::text = t.car_id::text
-            LEFT JOIN sellers s ON s.seller_id::text = t.seller_id::text
+            LEFT JOIN sellers s ON s.id::text = t.seller_id::text
             WHERE t.transaction_id = %s
         """, (req.transaction_id,))
         row = cur.fetchone()
