@@ -106,7 +106,8 @@ def get_transaction_by_car(car_id: str):
     try:
         cur.execute("""
             SELECT t.*,
-                   c.color, c.trim, c.mileage
+                   c.color,
+                   c.trim
             FROM transactions t
             LEFT JOIN cars c ON c.car_id::text = t.car_id::text
             WHERE t.car_id = %s
