@@ -119,7 +119,14 @@ def get_dealer_transactions(dealer_id: str):
     conn = get_connection()
     cur = conn.cursor()
     try:
-        cur.execute("SELECT * FROM transactions WHERE dealer_id = %s ORDER BY created_at DESC", (dealer_id,))
+        cur.execute("""
+            SELECT t.*,
+                   c.year, c.make, c.model, c.color, c.trim, c.mileage
+            FROM transactions t
+            LEFT JOIN cars c ON c.car_id::text = t.car_id::text
+            WHERE t.dealer_id = %s
+            ORDER BY t.created_at DESC
+        """, (dealer_id,))
         rows = cur.fetchall()
         cols = [desc[0] for desc in cur.description]
         return [dict(zip(cols, r)) for r in rows]
