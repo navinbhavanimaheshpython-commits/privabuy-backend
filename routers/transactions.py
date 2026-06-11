@@ -104,7 +104,14 @@ def get_transaction_by_car(car_id: str):
     conn = get_connection()
     cur = conn.cursor()
     try:
-        cur.execute("SELECT * FROM transactions WHERE car_id = %s ORDER BY created_at DESC LIMIT 1", (car_id,))
+        cur.execute("""
+            SELECT t.*,
+                   c.color, c.trim, c.mileage
+            FROM transactions t
+            LEFT JOIN cars c ON c.car_id::text = t.car_id::text
+            WHERE t.car_id = %s
+            ORDER BY t.created_at DESC LIMIT 1
+        """, (car_id,))
         row = cur.fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="No transaction for this car")
