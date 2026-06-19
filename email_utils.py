@@ -126,56 +126,8 @@ def send_admin_new_seller(name: str, email: str, phone: str):
     except Exception as e:
         print(f"[send_admin_new_seller] {e}")
 
+        
 
-def send_dealer_welcome(dealer_email: str, dealer_name: str, contact_name: str):
-    try:
-        resend.Emails.send({
-            "from": "PrivaBuy <notifications@privabuy.com>",
-            "to": dealer_email,
-            "subject": f"Welcome to PrivaBuy, {dealer_name}!",
-            "html": f"""
-            <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#f5f5f5;padding:20px;">
-              <div style="background:#080808;padding:24px;border-radius:12px;margin-bottom:20px;">
-                <h1 style="color:#c9b8ff;font-size:24px;margin:0;">PrivaBuy</h1>
-                <p style="color:rgba(255,255,255,0.5);margin:4px 0 0;">Dealer Welcome</p>
-              </div>
-              <div style="background:white;padding:24px;border-radius:12px;">
-                <h2 style="color:#1a1a1a;margin:0 0 16px;">Welcome to PrivaBuy, {contact_name}!</h2>
-                <p style="color:#444;">Your dealership <strong>{dealer_name}</strong> is now registered and approved on PrivaBuy. Here's everything you need to know to get started.</p>
-
-                <div style="background:#f8f8f8;padding:20px;border-radius:8px;margin:20px 0;">
-                  <h3 style="margin:0 0 12px;color:#1a1a1a;font-size:16px;">What is PrivaBuy?</h3>
-                  <p style="color:#444;margin:0;line-height:1.6;">PrivaBuy is a private-party vehicle auction marketplace. We connect private sellers of 6–8 year old, higher-mileage vehicles directly with franchised dealers like you — no auction house, no wholesaler markup. You bid directly against a small pool of competing dealers (never more than 5 per vehicle) for inventory in your territory.</p>
-                </div>
-
-                <div style="background:#f8f8f8;padding:20px;border-radius:8px;margin:20px 0;">
-                  <h3 style="margin:0 0 12px;color:#1a1a1a;font-size:16px;">How It Works</h3>
-                  <table style="width:100%;border-collapse:collapse;">
-                    <tr><td style="padding:8px 0;color:#666;width:24px;vertical-align:top;">1.</td><td style="padding:8px 0;color:#444;">A seller lists their vehicle with full VIN history, photos, and condition disclosure.</td></tr>
-                    <tr><td style="padding:8px 0;color:#666;vertical-align:top;">2.</td><td style="padding:8px 0;color:#444;">You and up to 4 other dealers in the territory are notified and can place bids — anonymously, with no time limit.</td></tr>
-                    <tr><td style="padding:8px 0;color:#666;vertical-align:top;">3.</td><td style="padding:8px 0;color:#444;">If you win, you'll sign a facilitation acknowledgement and pay a small platform fee to confirm your win.</td></tr>
-                    <tr><td style="padding:8px 0;color:#666;vertical-align:top;">4.</td><td style="padding:8px 0;color:#444;">Both parties sign a digital Bill of Sale, then you schedule pickup directly with the seller.</td></tr>
-                    <tr><td style="padding:8px 0;color:#666;vertical-align:top;">5.</td><td style="padding:8px 0;color:#444;">At pickup, you inspect the vehicle and pay the seller. PrivaBuy's facilitation fee is built into that payment, so there's nothing extra owed.</td></tr>
-                  </table>
-                </div>
-
-                <div style="background:#f8f8f8;padding:20px;border-radius:8px;margin:20px 0;">
-                  <h3 style="margin:0 0 12px;color:#1a1a1a;font-size:16px;">Why Dealers Use PrivaBuy</h3>
-                  <p style="color:#444;margin:0 0 8px;line-height:1.6;">✓ <strong>High-margin inventory</strong> — 6–8 year old, 70k–130k mile vehicles are the most profitable segment for pre-owned lots.</p>
-                  <p style="color:#444;margin:0 0 8px;line-height:1.6;">✓ <strong>Clean competition</strong> — never more than 5 dealers per auction, no chaotic open marketplace.</p>
-                  <p style="color:#444;margin:0 0 8px;line-height:1.6;">✓ <strong>Full transparency</strong> — VIN history, photos, and seller condition disclosures before you ever bid.</p>
-                  <p style="color:#444;margin:0;line-height:1.6;">✓ <strong>Buyer protection</strong> — if a vehicle doesn't match its disclosed condition, you can void the sale and your platform fee is fully refunded.</p>
-                </div>
-
-                <a href="{PORTAL_URL}?role=dealer" style="display:inline-block;background:#c9b8ff;color:#080808;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;margin:16px 0;">Go to Your Dealer Portal →</a>
-
-                <p style="color:#999;font-size:12px;margin-top:24px;">Questions? Reply to this email or reach us at support@privabuy.com. You're receiving this because you registered as a dealer on PrivaBuy.</p>
-              </div>
-            </div>
-            """
-        })
-    except Exception as e:
-        print(f"[send_dealer_welcome] {e}")
 
 def send_password_reset(email: str, name: str, token: str):
     reset_url = f"https://privabuy.com/reset-password?token={token}"
