@@ -167,7 +167,7 @@ def send_dealer_welcome(dealer_email: str, contact_name: str, dealer_name: str):
                   <tr><td style="padding:7px 0;border-bottom:1px solid #f5f5f5;color:#555;font-size:13px;">✅ First 5 vehicle wins</td><td style="padding:7px 0;border-bottom:1px solid #f5f5f5;text-align:right;font-weight:600;color:#1a1a1a;font-size:13px;">Free</td></tr>
                   <tr><td style="padding:7px 0;border-bottom:1px solid #f5f5f5;color:#555;font-size:13px;">📋 VinAudit history report on every listing</td><td style="padding:7px 0;border-bottom:1px solid #f5f5f5;text-align:right;font-weight:600;color:#1a1a1a;font-size:13px;">Included</td></tr>
                   <tr><td style="padding:7px 0;border-bottom:1px solid #f5f5f5;color:#555;font-size:13px;">📍 Local inventory only</td><td style="padding:7px 0;border-bottom:1px solid #f5f5f5;text-align:right;font-weight:600;color:#1a1a1a;font-size:13px;">Your territory</td></tr>
-                  <tr><td style="padding:7px 0;color:#555;font-size:13px;">💳 Pay per win — no subscription</td><td style="padding:7px 0;text-align:right;font-weight:600;color:#1a1a1a;font-size:13px;">$500/vehicle</td></tr>
+                  <tr><td style="padding:7px 0;color:#555;font-size:13px;">💳 Pay per win — no subscription</td><td style="padding:7px 0;text-align:right;font-weight:600;color:#1a1a1a;font-size:13px;">$600/vehicle</td></tr>
                 </table>
               </div>
 
