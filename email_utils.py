@@ -3,6 +3,8 @@
 import os
 resend.api_key = os.environ.get("RESEND_API_KEY")
 
+PORTAL_URL = "https://privabuy.com/portal.html"
+
 def send_dealer_new_listing(dealer_email: str, dealer_name: str, year: int, make: str, model: str, mileage: int, zip: str, car_id: str):
     try:
         resend.Emails.send({
