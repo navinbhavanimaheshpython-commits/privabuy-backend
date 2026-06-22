@@ -99,6 +99,92 @@ def send_admin_new_dealer(dealer_name: str, contact_name: str, email: str, licen
         print(f"[send_admin_new_dealer] {e}")
 
 
+def send_dealer_welcome(dealer_email: str, contact_name: str, dealer_name: str):
+    try:
+        resend.Emails.send({
+            "from": "PrivaBuy <notifications@privabuy.com>",
+            "to": dealer_email,
+            "subject": f"Welcome to PrivaBuy, {dealer_name} 🚗",
+            "html": f"""
+            <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#f5f5f5;padding:20px;">
+              <div style="background:#080808;padding:32px 24px;border-radius:12px;margin-bottom:20px;text-align:center;">
+                <h1 style="color:#c9b8ff;font-size:26px;margin:0 0 6px;">PrivaBuy</h1>
+                <p style="color:rgba(255,255,255,0.45);margin:0;font-size:13px;">Dealer Network</p>
+              </div>
+              <div style="background:white;padding:28px 24px;border-radius:12px;margin-bottom:12px;">
+                <h2 style="color:#1a1a1a;margin:0 0 10px;font-size:20px;">Welcome, {contact_name} 👋</h2>
+                <p style="color:#555;line-height:1.7;margin:0 0 20px;font-size:14px;">
+                  You're now part of the PrivaBuy dealer network. Here's a quick rundown of how the platform works and what to expect.
+                </p>
+
+                <div style="border-top:1px solid #f0f0f0;padding-top:20px;margin-bottom:20px;">
+                  <p style="font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#999;margin:0 0 16px;">What is PrivaBuy?</p>
+                  <p style="color:#555;line-height:1.7;font-size:14px;margin:0;">
+                    PrivaBuy is a two-sided vehicle marketplace that connects <strong>private sellers</strong> of 6–8 year old, higher-mileage vehicles directly with <strong>franchised dealers</strong> through real-time competitive auctions. No cold calls. No scraping listings. Motivated sellers come to you.
+                  </p>
+                </div>
+
+                <div style="border-top:1px solid #f0f0f0;padding-top:20px;margin-bottom:8px;">
+                  <p style="font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#999;margin:0 0 16px;">How It Works</p>
+
+                  <div style="display:flex;gap:14px;align-items:flex-start;margin-bottom:14px;">
+                    <div style="background:#f5f0ff;color:#7c5cbf;font-size:13px;font-weight:700;border-radius:50%;width:28px;height:28px;min-width:28px;display:flex;align-items:center;justify-content:center;">1</div>
+                    <div>
+                      <p style="margin:0 0 3px;font-size:14px;font-weight:600;color:#1a1a1a;">Seller Lists a Vehicle</p>
+                      <p style="margin:0;font-size:13px;color:#777;line-height:1.5;">A private seller submits their vehicle with photos, condition details, and a vehicle history report. You get notified immediately if it's in your territory.</p>
+                    </div>
+                  </div>
+
+                  <div style="display:flex;gap:14px;align-items:flex-start;margin-bottom:14px;">
+                    <div style="background:#f5f0ff;color:#7c5cbf;font-size:13px;font-weight:700;border-radius:50%;width:28px;height:28px;min-width:28px;display:flex;align-items:center;justify-content:center;">2</div>
+                    <div>
+                      <p style="margin:0 0 3px;font-size:14px;font-weight:600;color:#1a1a1a;">You Bid — Up to 5 Dealers Max</p>
+                      <p style="margin:0;font-size:13px;color:#777;line-height:1.5;">Auctions are open-ended with no forced close. You bid when you're ready. No subscription, no seat fee — pay only when you win.</p>
+                    </div>
+                  </div>
+
+                  <div style="display:flex;gap:14px;align-items:flex-start;margin-bottom:14px;">
+                    <div style="background:#f5f0ff;color:#7c5cbf;font-size:13px;font-weight:700;border-radius:50%;width:28px;height:28px;min-width:28px;display:flex;align-items:center;justify-content:center;">3</div>
+                    <div>
+                      <p style="margin:0 0 3px;font-size:14px;font-weight:600;color:#1a1a1a;">Seller Accepts — Deal Flow Begins</p>
+                      <p style="margin:0;font-size:13px;color:#777;line-height:1.5;">When a seller accepts your bid, PrivaBuy guides both of you through payment confirmation, bill of sale, pickup scheduling, and vehicle inspection — step by step.</p>
+                    </div>
+                  </div>
+
+                  <div style="display:flex;gap:14px;align-items:flex-start;">
+                    <div style="background:#f5f0ff;color:#7c5cbf;font-size:13px;font-weight:700;border-radius:50%;width:28px;height:28px;min-width:28px;display:flex;align-items:center;justify-content:center;">4</div>
+                    <div>
+                      <p style="margin:0 0 3px;font-size:14px;font-weight:600;color:#1a1a1a;">Vehicle is Yours</p>
+                      <p style="margin:0;font-size:13px;color:#777;line-height:1.5;">You pay the seller directly at pickup. PrivaBuy collects a flat dealer fee only after the deal closes. <strong>Your first 5 wins are free</strong> as an early partner.</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div style="background:white;padding:20px 24px;border-radius:12px;margin-bottom:12px;">
+                <p style="font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#999;margin:0 0 12px;">Your Early Partner Benefits</p>
+                <table style="width:100%;border-collapse:collapse;">
+                  <tr><td style="padding:7px 0;border-bottom:1px solid #f5f5f5;color:#555;font-size:13px;">✅ First 5 vehicle wins</td><td style="padding:7px 0;border-bottom:1px solid #f5f5f5;text-align:right;font-weight:600;color:#1a1a1a;font-size:13px;">Free</td></tr>
+                  <tr><td style="padding:7px 0;border-bottom:1px solid #f5f5f5;color:#555;font-size:13px;">📋 VinAudit history report on every listing</td><td style="padding:7px 0;border-bottom:1px solid #f5f5f5;text-align:right;font-weight:600;color:#1a1a1a;font-size:13px;">Included</td></tr>
+                  <tr><td style="padding:7px 0;border-bottom:1px solid #f5f5f5;color:#555;font-size:13px;">📍 Local inventory only</td><td style="padding:7px 0;border-bottom:1px solid #f5f5f5;text-align:right;font-weight:600;color:#1a1a1a;font-size:13px;">Your territory</td></tr>
+                  <tr><td style="padding:7px 0;color:#555;font-size:13px;">💳 Pay per win — no subscription</td><td style="padding:7px 0;text-align:right;font-weight:600;color:#1a1a1a;font-size:13px;">$500/vehicle</td></tr>
+                </table>
+              </div>
+
+              <div style="text-align:center;padding:20px 0 8px;">
+                <a href="{PORTAL_URL}?role=dealer" style="display:inline-block;background:#7c5cbf;color:#fff;padding:13px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px;">Go to Your Dealer Portal →</a>
+                <p style="margin:14px 0 0;font-size:12px;color:#aaa;">Questions? Reply to this email or reach us at <a href="mailto:navin@privabuy.com" style="color:#7c5cbf;">navin@privabuy.com</a></p>
+              </div>
+            </div>
+            """
+        })
+    except Exception as e:
+        import traceback
+        print(f"[send_dealer_welcome] ERROR: {e}")
+        traceback.print_exc()
+        raise  # re-raise so it shows in logs
+
+
 def send_admin_new_seller(name: str, email: str, phone: str):
     try:
         resend.Emails.send({
