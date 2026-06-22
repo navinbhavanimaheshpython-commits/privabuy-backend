@@ -172,7 +172,10 @@ def send_dealer_welcome(dealer_email: str, contact_name: str, dealer_name: str):
             """
         })
     except Exception as e:
-        print(f"[send_dealer_welcome] {e}")
+        import traceback
+        print(f"[send_dealer_welcome] ERROR: {e}")
+        traceback.print_exc()
+        raise  # re-raise so it shows in logs
 
 def send_admin_new_seller(name: str, email: str, phone: str):
     try:
