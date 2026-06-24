@@ -16,7 +16,7 @@ def get_db():
 
 class InvoiceRequest(BaseModel):
     dealer_id: str
-    dealer_fee: int = 200
+    dealer_fee: int = 0
     win_price: float
 
 def generate_invoice_number(conn) -> str:
