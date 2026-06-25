@@ -172,3 +172,19 @@ def check_license(data: LicenseCheck):
     finally:
         cur.close()
         conn.close()
+
+
+@router.get("/{dealer_id}/win-count")
+def get_dealer_win_count(dealer_id: str):
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT COUNT(*) FROM transactions
+            WHERE dealer_id = %s AND status = 'completed'
+        """, (dealer_id,))
+        completed_wins = cur.fetchone()[0]
+        return {"dealer_id": dealer_id, "completed_wins": completed_wins}
+    finally:
+        cur.close()
+        conn.close()
