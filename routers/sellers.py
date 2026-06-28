@@ -5,7 +5,8 @@ from datetime import datetime, timedelta
 import secrets
 from database import get_connection
 import hashlib
-from email_utils import send_admin_new_seller
+from email_utils import send_admin_new_seller , send_seller_welcome
+
 
 router = APIRouter(prefix="/sellers", tags=["sellers"])
 
@@ -38,6 +39,7 @@ def register_seller(data: SellerCreate):
         """, (seller_id, data.phone, data.email, hash_password(data.password), data.name, datetime.utcnow()))
         conn.commit()
         send_admin_new_seller(data.name, data.email, data.phone)
+        send_seller_welcome(data.name, data.email)
         return {"seller_id": seller_id, "name": data.name, "email": data.email}
     except HTTPException:
         raise

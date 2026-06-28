@@ -1,4 +1,5 @@
-﻿import resend
+﻿#Staging
+import resend
 
 import os
 resend.api_key = os.environ.get("RESEND_API_KEY")
@@ -414,3 +415,76 @@ def send_deal_complete(seller_email: str, seller_name: str, dealer_email: str, d
             resend.Emails.send({"from": "PrivaBuy <noreply@privabuy.com>","to": email,"subject": f"Deal Complete - {year} {make} {model}","html": f"<div style='font-family:Inter,sans-serif;padding:32px;'><h2>Deal complete!</h2><p>Hi {name}, the sale of the {year} {make} {model} for <strong>${amount:,.0f}</strong> is fully complete. Thank you for using PrivaBuy!</p></div>"})
         except Exception as e:
             print(f"Email error: {e}")
+
+def send_seller_welcome(name: str, email: str):
+    try:
+        resend.Emails.send({
+            "from": "PrivaBuy <notifications@privabuy.com>",
+            "to": email,
+            "subject": "You're registered — dealers near you are waiting",
+            "html": f"""
+            <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#f5f5f5;padding:20px;">
+
+              <div style="background:#080808;padding:32px 24px;border-radius:12px;margin-bottom:20px;text-align:center;">
+                <h1 style="color:#c9b8ff;font-size:26px;margin:0 0 6px;font-style:italic;">PrivaBuy</h1>
+                <p style="color:rgba(255,255,255,0.45);margin:0;font-size:13px;letter-spacing:0.05em;">Private Vehicle Auctions</p>
+              </div>
+
+              <div style="background:white;padding:28px 24px;border-radius:12px;margin-bottom:12px;">
+                <p style="color:#888;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;margin:0 0 8px;">You're In</p>
+                <h2 style="color:#1a1a1a;margin:0 0 16px;font-size:22px;line-height:1.3;">Welcome, {name}. Your account is ready.</h2>
+                <p style="color:#555;line-height:1.7;font-size:14px;margin:0 0 24px;">
+                  You're now registered on PrivaBuy. Franchised dealers in your area are actively bidding on private vehicles right now — list yours and let them compete for it.
+                </p>
+
+                <div style="background:#fafafa;border:1px solid #efefef;border-radius:10px;padding:20px;margin-bottom:24px;">
+                  <p style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.10em;color:#999;margin:0 0 16px;">What to do next</p>
+
+                  <div style="display:flex;gap:14px;align-items:flex-start;margin-bottom:16px;">
+                    <div style="background:#7c5cbf;color:#fff;font-size:12px;font-weight:700;border-radius:50%;width:26px;height:26px;min-width:26px;display:flex;align-items:center;justify-content:center;margin-top:1px;">1</div>
+                    <div>
+                      <p style="margin:0 0 3px;font-size:14px;font-weight:600;color:#1a1a1a;">Enter your VIN</p>
+                      <p style="margin:0;font-size:13px;color:#777;line-height:1.5;">We decode your vehicle automatically. Takes 10 seconds.</p>
+                    </div>
+                  </div>
+
+                  <div style="display:flex;gap:14px;align-items:flex-start;margin-bottom:16px;">
+                    <div style="background:#7c5cbf;color:#fff;font-size:12px;font-weight:700;border-radius:50%;width:26px;height:26px;min-width:26px;display:flex;align-items:center;justify-content:center;margin-top:1px;">2</div>
+                    <div>
+                      <p style="margin:0 0 3px;font-size:14px;font-weight:600;color:#1a1a1a;">Upload 6 photos</p>
+                      <p style="margin:0;font-size:13px;color:#777;line-height:1.5;">Front, rear, sides, interior, odometer. Better photos get higher bids.</p>
+                    </div>
+                  </div>
+
+                  <div style="display:flex;gap:14px;align-items:flex-start;">
+                    <div style="background:#7c5cbf;color:#fff;font-size:12px;font-weight:700;border-radius:50%;width:26px;height:26px;min-width:26px;display:flex;align-items:center;justify-content:center;margin-top:1px;">3</div>
+                    <div>
+                      <p style="margin:0 0 3px;font-size:14px;font-weight:600;color:#1a1a1a;">Set your minimum price and go live</p>
+                      <p style="margin:0;font-size:13px;color:#777;line-height:1.5;">Your auction starts instantly. Dealers are notified and bids can come in within minutes.</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div style="background:#fff8e6;border:1px solid #f0d080;border-radius:10px;padding:16px 18px;margin-bottom:28px;">
+                  <p style="margin:0;font-size:13px;color:#7a5500;line-height:1.7;">
+                    <strong style="color:#5a3a00;">⚡ Dealers in your area are active right now.</strong> Every day you wait is a day another seller collects bids. Your listing costs nothing to start.
+                  </p>
+                </div>
+
+                <div style="text-align:center;">
+                  <a href="{PORTAL_URL}?role=seller" style="display:inline-block;background:#7c5cbf;color:#fff;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:700;font-size:15px;letter-spacing:0.01em;">
+                    Complete My Listing →
+                  </a>
+                  <p style="margin:14px 0 0;font-size:12px;color:#bbb;">Listing is free. You only pay a $250 fee if you accept a bid — deducted from what the dealer pays you.</p>
+                </div>
+              </div>
+
+              <p style="text-align:center;font-size:12px;color:#bbb;margin:0;padding-bottom:8px;">
+                Questions? Reply to this email or reach us at <a href="mailto:navin@privabuy.com" style="color:#7c5cbf;text-decoration:none;">navin@privabuy.com</a>
+              </p>
+
+            </div>
+            """
+        })
+    except Exception as e:
+        print(f"[send_seller_welcome] {e}")
