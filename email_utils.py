@@ -527,3 +527,56 @@ def send_admin_dispute_filed(txn_id: str, year: int, make: str, model: str, deal
         })
     except Exception as e:
         print(f"[send_admin_dispute_filed] {e}")
+
+def send_seller_welcome(name: str, email: str):
+    try:
+        resend.Emails.send({
+            "from": "PrivaBuy <notifications@privabuy.com>",
+            "to": email,
+            "subject": "Welcome to PrivaBuy — Your Auction is Free to Start",
+            "html": f"""
+            <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#f5f5f5;padding:20px;">
+              <div style="background:#080808;padding:32px 24px;border-radius:12px;margin-bottom:20px;text-align:center;">
+                <h1 style="color:#c9b8ff;font-size:26px;margin:0 0 6px;">PrivaBuy</h1>
+                <p style="color:rgba(255,255,255,0.45);margin:0;font-size:13px;">Private Seller Platform</p>
+              </div>
+              <div style="background:white;padding:28px 24px;border-radius:12px;margin-bottom:12px;">
+                <h2 style="color:#1a1a1a;margin:0 0 10px;font-size:20px;">Welcome, {name} 👋</h2>
+                <p style="color:#555;line-height:1.7;font-size:14px;margin:0 0 20px;">
+                  You're registered on PrivaBuy. Here's how it works:
+                </p>
+
+                <div style="border-top:1px solid #f0f0f0;padding-top:20px;margin-bottom:20px;">
+                  <div style="display:flex;gap:14px;align-items:flex-start;margin-bottom:14px;">
+                    <div style="background:#f5f0ff;color:#7c5cbf;font-size:13px;font-weight:700;border-radius:50%;width:28px;height:28px;min-width:28px;display:flex;align-items:center;justify-content:center;">1</div>
+                    <div>
+                      <p style="margin:0 0 3px;font-size:14px;font-weight:600;color:#1a1a1a;">List your vehicle — free</p>
+                      <p style="margin:0;font-size:13px;color:#777;line-height:1.5;">Enter your VIN, upload photos, and set a minimum price. Takes about 5 minutes.</p>
+                    </div>
+                  </div>
+                  <div style="display:flex;gap:14px;align-items:flex-start;margin-bottom:14px;">
+                    <div style="background:#f5f0ff;color:#7c5cbf;font-size:13px;font-weight:700;border-radius:50%;width:28px;height:28px;min-width:28px;display:flex;align-items:center;justify-content:center;">2</div>
+                    <div>
+                      <p style="margin:0 0 3px;font-size:14px;font-weight:600;color:#1a1a1a;">Dealers compete for your car</p>
+                      <p style="margin:0;font-size:13px;color:#777;line-height:1.5;">Up to 5 local franchised dealers bid in real time. No time limit — accept whenever you're ready.</p>
+                    </div>
+                  </div>
+                  <div style="display:flex;gap:14px;align-items:flex-start;">
+                    <div style="background:#f5f0ff;color:#7c5cbf;font-size:13px;font-weight:700;border-radius:50%;width:28px;height:28px;min-width:28px;display:flex;align-items:center;justify-content:center;">3</div>
+                    <div>
+                      <p style="margin:0 0 3px;font-size:14px;font-weight:600;color:#1a1a1a;">Accept and get paid</p>
+                      <p style="margin:0;font-size:13px;color:#777;line-height:1.5;">Accept the bid you want. The dealer picks up the vehicle and pays you directly. A $250 facilitation fee is deducted from the bid — you never pay out of pocket.</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div style="text-align:center;padding:20px 0 8px;">
+                <a href="{PORTAL_URL}?role=seller" style="display:inline-block;background:#7c5cbf;color:#fff;padding:13px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px;">Start Your Free Listing →</a>
+                <p style="margin:14px 0 0;font-size:12px;color:#aaa;">Questions? Email <a href="mailto:navin@privabuy.com" style="color:#7c5cbf;">navin@privabuy.com</a></p>
+              </div>
+            </div>
+            """
+        })
+    except Exception as e:
+        print(f"[send_seller_welcome] {e}")
