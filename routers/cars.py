@@ -1,4 +1,4 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 import uuid
 from datetime import datetime
@@ -15,6 +15,7 @@ router = APIRouter(
 
 class CarListing(BaseModel):# these are set by backend, not sent by frontend
     seller_id: str
+
     year: int
     make: str
     model: str
@@ -246,8 +247,8 @@ def admin_listings():
         cur.execute("""
             SELECT c.car_id, c.year, c.make, c.model, c.mileage, c.status, c.created_at,
                    s.email as seller_email,
-                   (SELECT COUNT(*) FROM offers o WHERE o.car_id = c.id) as bid_count,
-                   (SELECT MAX(offer_amount) FROM offers o WHERE o.car_id = c.id) as top_bid
+                   (SELECT COUNT(*) FROM offers o WHERE o.car_id = c.car_id) as bid_count,
+                   (SELECT MAX(offer_amount) FROM offers o WHERE o.car_id = c.car_id) as top_bid
             FROM cars c
             LEFT JOIN sellers s ON c.seller_id = s.id
             ORDER BY c.created_at DESC
