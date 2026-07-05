@@ -71,21 +71,19 @@ async def process_lead(leadgen_id: str):
         mileage = field_data.get("mileage", "")
         condition = field_data.get("condition", "")
 
-        # Rough split of Y/M/M — refine later in the wizard, this is just a starting point
         parts = ymm.split(" ", 2)
         year = parts[0] if len(parts) > 0 else ""
         make = parts[1] if len(parts) > 1 else ""
         model = parts[2] if len(parts) > 2 else ""
 
-        pending_id = str(uuid.uuid4())
         token = secrets.token_urlsafe(32)
 
         cur.execute("""
             INSERT INTO pending_sellers
-                (id, name, phone, email, year, make, model, mileage, condition,
+                (name, phone, email, year, make, model, mileage, condition,
                  prefill_token, meta_leadgen_id, created_at)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-        """, (pending_id, name, phone, email, year, make, model, mileage, condition,
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """, (name, phone, email, year, make, model, mileage, condition,
               token, leadgen_id, datetime.utcnow()))
         conn.commit()
 
