@@ -3,7 +3,7 @@ load_dotenv()
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from routers import cars, dealers, offers, sellers, payments, transactions, invoices
+from routers import cars, dealers, offers, sellers, payments, transactions, invoices, webhooks
 import os
 
 app = FastAPI()
@@ -23,6 +23,7 @@ app.include_router(sellers.router)
 app.include_router(payments.router)
 app.include_router(transactions.router)
 app.include_router(invoices.router, tags=["invoices"])
+app.include_router(webhooks.router)
 
 @app.get("/")
 def home():

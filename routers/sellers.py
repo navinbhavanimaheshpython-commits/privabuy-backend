@@ -148,3 +148,25 @@ def reset_password(data: ResetPassword):
     finally:
         cur.close()
         conn.close()
+
+
+@router.get("/prefill/{token}")
+def get_prefill_data(token: str):
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT name, phone, email, year, make, model, mileage, condition
+            FROM pending_sellers WHERE prefill_token = %s
+        """, (token,))
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Invalid or expired link.")
+        return {
+            "name": row[0], "phone": row[1], "email": row[2],
+            "year": row[3], "make": row[4], "model": row[5],
+            "mileage": row[6], "condition": row[7]
+        }
+    finally:
+        cur.close()
+        conn.close()

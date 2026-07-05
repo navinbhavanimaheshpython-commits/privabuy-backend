@@ -580,3 +580,30 @@ def send_seller_welcome(name: str, email: str):
         })
     except Exception as e:
         print(f"[send_seller_welcome] {e}")
+
+
+
+def send_seller_magic_link(seller_email: str, name: str, token: str, year: str, make: str, model: str):
+    magic_url = f"{PORTAL_URL}?role=seller&prefill_token={token}"
+    try:
+        resend.Emails.send({
+            "from": "PrivaBuy <notifications@privabuy.com>",
+            "to": seller_email,
+            "subject": f"Finish Your {year} {make} {model} Listing — 2 Minutes",
+            "html": f"""
+            <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#f5f5f5;padding:20px;">
+              <div style="background:#080808;padding:24px;border-radius:12px;margin-bottom:20px;">
+                <h1 style="color:#c9b8ff;font-size:24px;margin:0;">PrivaBuy</h1>
+                <p style="color:rgba(255,255,255,0.5);margin:4px 0 0;">You're Pre-Qualified</p>
+              </div>
+              <div style="background:white;padding:24px;border-radius:12px;">
+                <h2 style="color:#1a1a1a;margin:0 0 16px;">Finish Your Listing, {name}</h2>
+                <p style="color:#444;">We've already saved your <strong>{year} {make} {model}</strong> details. Just add photos and a few more details and dealers can start bidding.</p>
+                <a href="{magic_url}" style="display:inline-block;background:#7c5cbf;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;margin:16px 0;">Finish My Listing →</a>
+                <p style="color:#999;font-size:12px;margin-top:24px;">This link is unique to you — don't share it.</p>
+              </div>
+            </div>
+            """
+        })
+    except Exception as e:
+        print(f"[send_seller_magic_link] {e}")
