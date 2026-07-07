@@ -2,10 +2,13 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from database import get_connection
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 import psycopg2
 from typing import Literal
 from email_utils import send_seller_new_bid
+
+
+dealer_payment_deadline = datetime.utcnow() + timedelta(hours=48)
 
 router = APIRouter(
     prefix="/offers",
