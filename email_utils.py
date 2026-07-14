@@ -607,3 +607,5 @@ def send_seller_magic_link(seller_email: str, name: str, token: str, year: str, 
         })
     except Exception as e:
         print(f"[send_seller_magic_link] {e}")
+
+
