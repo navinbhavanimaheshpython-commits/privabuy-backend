@@ -79,10 +79,10 @@ def send_draft_nudges():
         cur.execute("""
             SELECT d.seller_id, d.year, d.make, d.model, s.email, s.name
             FROM car_drafts d
-            JOIN sellers s ON s.id = d.seller_id
+            JOIN sellers s ON s.id = d.seller_id::uuid
             WHERE d.completed = FALSE
-              AND d.nudge_sent_at IS NULL
-              AND d.updated_at <= %s
+            AND d.nudge_sent_at IS NULL
+            AND d.updated_at <= %s
         """, (cutoff,))
         stale_drafts = cur.fetchall()
 
