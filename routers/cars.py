@@ -1,4 +1,4 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 import uuid
 from datetime import datetime
@@ -15,6 +15,7 @@ router = APIRouter(
 
 class CarListing(BaseModel):# these are set by backend, not sent by frontend
     seller_id: str
+
     year: int
     make: str
     model: str
@@ -42,6 +43,7 @@ class CarListing(BaseModel):# these are set by backend, not sent by frontend
     lien_holder: str = ''
     lien_payoff_amount: int = 0
     lien_payoff_url: str = ''
+
 
 @router.post("/list-car")
 async def list_car(data: CarListing):
@@ -124,7 +126,7 @@ async def list_car(data: CarListing):
             UPDATE cars SET has_accident = %s, vinaudit_accidents = %s
             WHERE car_id = %s
         """, (has_accident, vinaudit_accidents, car_id))
-
+        cur.execute("UPDATE car_drafts SET completed = TRUE WHERE seller_id = %s", (data.seller_id,))
         conn.commit()
         return {"status": "ok", "car_id": car_id, "connected_dealers": len(dealers)}
     except Exception as e:
@@ -244,10 +246,10 @@ def admin_listings():
     cur = conn.cursor()
     try:
         cur.execute("""
-            SELECT c.id, c.year, c.make, c.model, c.mileage, c.status, c.created_at,
+            SELECT c.car_id, c.year, c.make, c.model, c.mileage, c.status, c.created_at,
                    s.email as seller_email,
-                   (SELECT COUNT(*) FROM offers o WHERE o.car_id = c.id) as bid_count,
-                   (SELECT MAX(offer_amount) FROM offers o WHERE o.car_id = c.id) as top_bid
+                   (SELECT COUNT(*) FROM offers o WHERE o.car_id = c.car_id) as bid_count,
+                   (SELECT MAX(offer_amount) FROM offers o WHERE o.car_id = c.car_id) as top_bid
             FROM cars c
             LEFT JOIN sellers s ON c.seller_id = s.id
             ORDER BY c.created_at DESC
@@ -365,6 +367,44 @@ def get_car(car_id: str):
             "has_accident": c[29] if len(c) > 29 else False,
             "vinaudit_accidents": c[30] if len(c) > 30 else 0,
         }
+    finally:
+        cur.close()
+        conn.close()
+
+
+class DraftIn(BaseModel):
+    seller_id: str
+    year: str
+    make: str
+    model: str
+    trim: str = ''
+    mileage: str = ''
+    zip: str = ''
+
+@router.post("/draft")
+def upsert_draft(payload: DraftIn):
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            INSERT INTO car_drafts (seller_id, year, make, model, trim, mileage, zip, updated_at, completed)
+            VALUES (%s,%s,%s,%s,%s,%s,%s, NOW(), FALSE)
+            ON CONFLICT (seller_id) DO UPDATE SET
+                year = EXCLUDED.year,
+                make = EXCLUDED.make,
+                model = EXCLUDED.model,
+                trim = EXCLUDED.trim,
+                mileage = EXCLUDED.mileage,
+                zip = EXCLUDED.zip,
+                updated_at = NOW(),
+                completed = FALSE
+        """, (payload.seller_id, payload.year, payload.make, payload.model,
+              payload.trim, payload.mileage, payload.zip))
+        conn.commit()
+        return {"ok": True}
+    except Exception as e:
+        conn.rollback()
+        raise e
     finally:
         cur.close()
         conn.close()
