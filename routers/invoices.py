@@ -153,7 +153,7 @@ async def send_dealer_invoice(txn_id: str, payload: InvoiceRequest):
                    d.dealer_name, d.email,
                    c.year, c.make, c.model
             FROM transactions t
-            JOIN dealers d ON d.id = t.dealer_id
+            JOIN dealers d ON d.id = t.dealer_id::uuid
             JOIN cars c ON c.car_id = t.car_id
             WHERE t.transaction_id = %s
         """, (txn_id,))
