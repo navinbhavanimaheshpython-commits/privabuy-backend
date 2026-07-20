@@ -154,7 +154,7 @@ async def send_dealer_invoice(txn_id: str, payload: InvoiceRequest):
                    c.year, c.make, c.model
             FROM transactions t
             JOIN dealers d ON d.id = t.dealer_id::uuid
-            JOIN cars c ON c.car_id = t.car_id
+            JOIN cars c ON c.car_id = t.car_id::uuid
             WHERE t.transaction_id = %s
         """, (txn_id,))
         row = cur.fetchone()
