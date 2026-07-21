@@ -320,17 +320,19 @@ def inspection_reject(transaction_id: str, req: InspectionRejectRequest):
     conn = get_connection()
     cur = conn.cursor()
     try:
-        cur.execute("SELECT dealer_id FROM transactions WHERE transaction_id = %s", (transaction_id,))
+        cur.execute("SELECT dealer_id, status FROM transactions WHERE transaction_id = %s", (transaction_id,))
         row = cur.fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Transaction not found")
-        if str(row[0]) != req.dealer_id:
+        dealer_id, current_status = row
+        if str(dealer_id) != req.dealer_id:
             raise HTTPException(status_code=403, detail="Not authorized")
         cur.execute("""UPDATE transactions SET status='dispute_flagged',
+            pre_dispute_status=%s,
             inspection_reject_reason=%s, inspection_rejected_at=%s,
             dispute_category=%s, dispute_evidence_urls=%s, dispute_submitted_at=%s
             WHERE transaction_id=%s""",
-            (req.reason, datetime.utcnow(), req.category, req.evidence_urls, datetime.utcnow(), transaction_id))
+            (current_status, req.reason, datetime.utcnow(), req.category, req.evidence_urls, datetime.utcnow(), transaction_id))
         conn.commit()   
         return {"status": "dispute_flagged", "reason": req.reason}
     except Exception:
@@ -354,9 +356,12 @@ def resolve_dispute(transaction_id: str, req: DisputeResolveRequest):
                 refund_status='refunded', refund_issued_at=%s WHERE transaction_id=%s""",
                 (datetime.utcnow(), transaction_id))
         else:
-            cur.execute("""UPDATE transactions SET status='dispute_resolved_denied',
+            cur.execute("SELECT pre_dispute_status FROM transactions WHERE transaction_id = %s", (transaction_id,))
+            pds_row = cur.fetchone()
+            resume_status = pds_row[0] if pds_row and pds_row[0] else 'awaiting_dealer_payment'
+            cur.execute("""UPDATE transactions SET status=%s,
                 refund_status='denied' WHERE transaction_id=%s""",
-                (transaction_id,))
+                (resume_status, transaction_id))
         conn.commit()
         return {"status": "resolved", "decision": req.decision}
     except Exception:
