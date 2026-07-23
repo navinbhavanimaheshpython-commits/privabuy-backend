@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 import secrets
 from database import get_connection
 import hashlib
-from email_utils import send_admin_new_seller , send_seller_welcome
+from email_utils import send_admin_new_seller, send_seller_welcome
 
 
 router = APIRouter(prefix="/sellers", tags=["sellers"])
@@ -145,6 +145,28 @@ def reset_password(data: ResetPassword):
         """, (hash_password(data.password), seller[0]))
         conn.commit()
         return {"status": "ok"}
+    finally:
+        cur.close()
+        conn.close()
+
+
+@router.get("/prefill/{token}")
+def get_prefill_data(token: str):
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT name, phone, email, year, make, model, mileage, condition
+            FROM pending_sellers WHERE prefill_token = %s
+        """, (token,))
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Invalid or expired link.")
+        return {
+            "name": row[0], "phone": row[1], "email": row[2],
+            "year": row[3], "make": row[4], "model": row[5],
+            "mileage": row[6], "condition": row[7]
+        }
     finally:
         cur.close()
         conn.close()
