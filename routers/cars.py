@@ -408,3 +408,87 @@ def upsert_draft(payload: DraftIn):
     finally:
         cur.close()
         conn.close()
+
+
+class GuestDraftIn(BaseModel):
+    session_id: str
+    vin: str = ''
+    year: str = ''
+    make: str = ''
+    model: str = ''
+    mileage: str = ''
+
+@router.post("/draft-guest")
+def upsert_guest_draft(payload: GuestDraftIn):
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        year_val = int(payload.year) if payload.year.isdigit() else None
+        mileage_val = int(payload.mileage) if payload.mileage.isdigit() else None
+        cur.execute("""
+            INSERT INTO guest_drafts (session_id, vin, year, make, model, mileage, updated_at)
+            VALUES (%s,%s,%s,%s,%s,%s, NOW())
+            ON CONFLICT (session_id) DO UPDATE SET
+                vin = EXCLUDED.vin,
+                year = EXCLUDED.year,
+                make = EXCLUDED.make,
+                model = EXCLUDED.model,
+                mileage = EXCLUDED.mileage,
+                updated_at = NOW()
+        """, (payload.session_id, payload.vin or None, year_val,
+              payload.make or None, payload.model or None, mileage_val))
+        conn.commit()
+        return {"ok": True}
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        cur.close()
+        conn.close()
+
+
+class AttachEmailIn(BaseModel):
+    session_id: str
+    email: str
+
+@router.post("/draft-guest/attach-email")
+def attach_guest_draft_email(payload: AttachEmailIn):
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            UPDATE guest_drafts SET email = %s, updated_at = NOW()
+            WHERE session_id = %s
+        """, (payload.email, payload.session_id))
+        conn.commit()
+        return {"ok": True}
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        cur.close()
+        conn.close()
+
+
+class MarkConvertedIn(BaseModel):
+    session_id: str
+    seller_id: str
+
+@router.post("/draft-guest/mark-converted")
+def mark_guest_draft_converted(payload: MarkConvertedIn):
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            UPDATE guest_drafts SET converted_to_seller_id = %s, updated_at = NOW()
+            WHERE session_id = %s
+        """, (payload.seller_id, payload.session_id))
+        conn.commit()
+        return {"ok": True}
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        cur.close()
+        conn.close()
+
