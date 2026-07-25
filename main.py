@@ -29,8 +29,8 @@ app.include_router(webhooks.router)
 def home():
     return {"message": "AutoOS API running"}
 
-ADMIN_PASSWORD = "Hanuman@1015"
-ADMIN_EMAIL = "navinbhavanimaheshpython@gmail.com"
+ADMIN_PASSWORD = "HolyLion@1015"
+ADMIN_EMAIL = "navinbhavanimahesh55"
 
 @app.post("/admin/login")
 def admin_login(data: dict):
