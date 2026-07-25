@@ -30,7 +30,7 @@ def home():
     return {"message": "AutoOS API running"}
 
 ADMIN_PASSWORD = "HolyLion@1015"
-ADMIN_EMAIL = "navinbhavanimahesh55"
+ADMIN_EMAIL = "navinbhavanimahesh55@gmail.com"
 
 @app.post("/admin/login")
 def admin_login(data: dict):
