@@ -98,7 +98,7 @@ def send_draft_nudges():
                         <p>Hey {name or 'there'},</p>
                         <p>You started listing your <strong>{year} {make} {model}</strong>
                         on PrivaBuy — dealers are already checking new listings in your area.</p>
-                        <p><a href="https://app.privabuy.com/seller?resume={seller_id}">
+                        <p><a href="https://privabuy.com/portal.html?role=seller&resume_seller_id={seller_id}">
                         Finish your listing →</a></p>
                         <p>Takes about 2 more minutes.</p>
                     """,
