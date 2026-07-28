@@ -492,3 +492,31 @@ def mark_guest_draft_converted(payload: MarkConvertedIn):
         cur.close()
         conn.close()
 
+
+@router.get("/draft/{seller_id}")
+def get_draft(seller_id: str):
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT year, make, model, trim, mileage, zip, completed, updated_at
+            FROM car_drafts
+            WHERE seller_id = %s
+        """, (seller_id,))
+        row = cur.fetchone()
+        if not row:
+            return {"found": False}
+        return {
+            "found": True,
+            "year": row[0] or '',
+            "make": row[1] or '',
+            "model": row[2] or '',
+            "trim": row[3] or '',
+            "mileage": row[4] or '',
+            "zip": row[5] or '',
+            "completed": row[6],
+            "updated_at": str(row[7]) if row[7] else None,
+        }
+    finally:
+        cur.close()
+        conn.close()
