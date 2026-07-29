@@ -6,6 +6,7 @@ import uuid
 from database import get_connection
 
 
+
 router = APIRouter(prefix="/transactions", tags=["transactions"])
 
 # ─────────────────────────────────────────────
@@ -42,6 +43,8 @@ class BillOfSaleAckRequest(BaseModel):
 # ─────────────────────────────────────────────
 #  INTERNAL HELPER
 # ─────────────────────────────────────────────
+
+SELLER_FEE = 350
 
 def create_transaction_record(cur, offer_id: str, car_id: str,
                                dealer_id: str, seller_id: str, amount: float):
