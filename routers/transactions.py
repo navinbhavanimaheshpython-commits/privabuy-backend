@@ -4,6 +4,7 @@ from typing import Optional
 from datetime import datetime, timedelta
 import uuid
 from database import get_connection
+from routers.payments_bill import create_invoice_for_transaction
 
 
 
@@ -381,45 +382,79 @@ def resolve_dispute(transaction_id: str, req: DisputeResolveRequest):
 #  WILDCARD POST ROUTES
 # ─────────────────────────────────────────────
 
+DEALER_FEE = 450
+FREE_WINS = 5
+
 @router.post("/{transaction_id}/dealer-paid")
-def mark_dealer_paid(transaction_id: str):
+async def mark_dealer_paid(transaction_id: str):
     conn = get_connection()
     cur = conn.cursor()
+    dealer_id = None
     try:
-        cur.execute("SELECT status, dealer_payment_deadline FROM transactions WHERE transaction_id = %s", (transaction_id,))
+        cur.execute(
+            "SELECT dealer_payment_deadline, dealer_id FROM transactions WHERE transaction_id = %s",
+            (transaction_id,)
+        )
         row = cur.fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Transaction not found")
-        status, deadline = row
+        deadline, dealer_id = row
+
         if datetime.utcnow() > deadline:
-            cur.execute("UPDATE transactions SET status='forfeited', forfeited_at=%s WHERE transaction_id=%s", (datetime.utcnow(), transaction_id))
+            cur.execute(
+                "UPDATE transactions SET status='forfeited', forfeited_at=%s WHERE transaction_id=%s",
+                (datetime.utcnow(), transaction_id)
+            )
             conn.commit()
             raise HTTPException(status_code=400, detail="24hr deadline expired — bid forfeited")
-        cur.execute("UPDATE transactions SET dealer_fee_paid=TRUE, dealer_paid_at=%s, status='awaiting_bill_of_sale' WHERE transaction_id=%s", (datetime.utcnow(), transaction_id))
-        conn.commit()
-        return {"status": "awaiting_bill_of_sale"}
-    except Exception:
+
+        cur.execute(
+            "SELECT COUNT(*) FROM transactions WHERE dealer_id = %s AND status = 'completed'",
+            (dealer_id,)
+        )
+        completed_wins = cur.fetchone()[0]
+
+        if completed_wins < FREE_WINS:
+            cur.execute(
+                "UPDATE transactions SET dealer_fee_paid=TRUE, dealer_paid_at=%s, status='awaiting_bill_of_sale' WHERE transaction_id=%s",
+                (datetime.utcnow(), transaction_id)
+            )
+            conn.commit()
+            return {"status": "awaiting_bill_of_sale", "fee_charged": False}
+
+    except HTTPException:
         conn.rollback()
         raise
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
     finally:
         cur.close()
         conn.close()
 
+    invoice = await create_invoice_for_transaction(transaction_id, str(dealer_id), DEALER_FEE, "dealer_fee")
+    return {"status": "awaiting_dealer_payment", "fee_charged": True, **invoice}
+
+
+SELLER_FEE = 350
+
 @router.post("/{transaction_id}/seller-paid")
-def mark_seller_paid(transaction_id: str):
+async def mark_seller_paid(transaction_id: str):
     conn = get_connection()
     cur = conn.cursor()
     try:
-        cur.execute("UPDATE transactions SET seller_fee_paid=TRUE, seller_paid_at=%s, status='completed', completed_at=%s WHERE transaction_id=%s",
-                    (datetime.utcnow(), datetime.utcnow(), transaction_id))
-        conn.commit()
-        return {"status": "completed"}
-    except Exception:
-        conn.rollback()
-        raise
+        cur.execute("SELECT seller_id FROM transactions WHERE transaction_id = %s", (transaction_id,))
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Transaction not found")
+        seller_id = row[0]
     finally:
         cur.close()
         conn.close()
+
+    invoice = await create_invoice_for_transaction(transaction_id, str(seller_id), SELLER_FEE, "seller_fee")
+    return {"status": "awaiting_seller_fee_payment", **invoice}
+
 
 @router.post("/{transaction_id}/forfeit")
 def forfeit_transaction(transaction_id: str):
