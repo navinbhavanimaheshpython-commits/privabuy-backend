@@ -225,40 +225,53 @@ async def bill_webhook(request: Request):
     if not verify_bill_signature(raw_body, signature):
         raise HTTPException(status_code=401, detail="Invalid webhook signature")
 
-    payload = await request.json()
-    event_type = payload.get("eventType", "")
+    body = await request.json()
 
-    if event_type in ("invoice.paid", "payment.completed"):
-        bill_invoice_id = payload.get("invoiceId") or payload.get("data", {}).get("invoiceId")
-        if not bill_invoice_id:
-            return {"ok": True}
+    # BILL's test/resend endpoints wrap the real payload as a JSON-escaped
+    # string under "payload"; live webhook deliveries send it unwrapped.
+    # Handle both so a sandbox test event doesn't silently no-op.
+    if isinstance(body.get("payload"), str):
+        import json
+        payload = json.loads(body["payload"])
+    else:
+        payload = body
 
-        conn = get_connection()
-        cur = conn.cursor()
-        try:
-            cur.execute(
-                "SELECT transaction_id, fee_type FROM invoices WHERE bill_invoice_id = %s",
-                (bill_invoice_id,),
-            )
-            row = cur.fetchone()
-            if row:
-                transaction_id, fee_type = row
-                cur.execute("UPDATE invoices SET status = 'paid' WHERE bill_invoice_id = %s", (bill_invoice_id,))
+    event_type = payload.get("metadata", {}).get("eventType", "")
 
-                if fee_type == "seller_fee":
-                    cur.execute("""
-                        UPDATE transactions SET seller_fee_paid = TRUE, seller_paid_at = %s,
-                        status = 'completed', completed_at = %s WHERE transaction_id = %s
-                    """, (datetime.utcnow(), datetime.utcnow(), transaction_id))
-                elif fee_type == "dealer_fee":
-                    cur.execute("""
-                        UPDATE transactions SET dealer_fee_paid = TRUE, dealer_paid_at = %s,
-                        status = 'awaiting_bill_of_sale' WHERE transaction_id = %s
-                    """, (datetime.utcnow(), transaction_id))
+    # BILL has no invoice.paid / payment.completed event. Payment completion
+    # arrives as invoice.updated with status flipped to PAID_IN_FULL.
+    if event_type == "invoice.updated":
+        invoice = payload.get("invoice", {})
+        bill_invoice_id = invoice.get("id")
+        status = invoice.get("status")
 
-                conn.commit()
-        finally:
-            cur.close()
-            conn.close()
+        if bill_invoice_id and status == "PAID_IN_FULL":
+            conn = get_connection()
+            cur = conn.cursor()
+            try:
+                cur.execute(
+                    "SELECT transaction_id, fee_type FROM invoices WHERE bill_invoice_id = %s",
+                    (bill_invoice_id,),
+                )
+                row = cur.fetchone()
+                if row:
+                    transaction_id, fee_type = row
+                    cur.execute("UPDATE invoices SET status = 'paid' WHERE bill_invoice_id = %s", (bill_invoice_id,))
+
+                    if fee_type == "seller_fee":
+                        cur.execute("""
+                            UPDATE transactions SET seller_fee_paid = TRUE, seller_paid_at = %s,
+                            status = 'completed', completed_at = %s WHERE transaction_id = %s
+                        """, (datetime.utcnow(), datetime.utcnow(), transaction_id))
+                    elif fee_type == "dealer_fee":
+                        cur.execute("""
+                            UPDATE transactions SET dealer_fee_paid = TRUE, dealer_paid_at = %s,
+                            status = 'awaiting_bill_of_sale' WHERE transaction_id = %s
+                        """, (datetime.utcnow(), transaction_id))
+
+                    conn.commit()
+            finally:
+                cur.close()
+                conn.close()
 
     return {"ok": True} 
