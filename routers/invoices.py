@@ -133,61 +133,25 @@ async def send_dealer_invoice(txn_id: str, payload: InvoiceRequest):
 
         # Get transaction + dealer + vehicle details
         cur.execute("""
-            SELECT t.amount, t.car_id,
+            SELECT t.amount, t.car_id, t.status,
                 d.dealer_name, d.email,
                 c.year, c.make, c.model
-                FROM transactions t
-                JOIN dealers d ON d.id = t.dealer_id::uuid
-                JOIN cars c ON c.car_id = t.car_id::uuid
-                WHERE t.transaction_id = %s
+            FROM transactions t
+            JOIN dealers d ON d.id = t.dealer_id::uuid
+            JOIN cars c ON c.car_id = t.car_id::uuid
+            WHERE t.transaction_id = %s
         """, (txn_id,))
         row = cur.fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Transaction not found")
 
-        win_price, car_id, dealer_name, dealer_email, year, make, model = row
+        win_price, car_id, current_status, dealer_name, dealer_email, year, make, model = row
         vehicle = f"{year} {make} {model}"
 
-        # Check if invoice already sent for this transaction
-        cur.execute("SELECT invoice_number FROM invoices WHERE transaction_id = %s", (txn_id,))
-        existing = cur.fetchone()
-        if existing:
-            # Already sent — just ensure status is advanced and return
-            cur.execute("""
-                UPDATE transactions SET status = 'awaiting_bill_of_sale'
-                WHERE transaction_id = %s
-            """, (txn_id,))
-            conn.commit()
-            cur.close()
-            return {"invoice_number": existing[0], "dealer_email": dealer_email, "already_sent": True}
-
-        # Generate invoice number
-        invoice_number = generate_invoice_number(conn)
-
-        # Build email HTML BEFORE using it
-        due_date = (datetime.now() + timedelta(days=30)).strftime("%B %d, %Y")
-        html = build_invoice_email(invoice_number, dealer_name, vehicle,
-                                   float(win_price), payload.dealer_fee, due_date)
-
-        # Save invoice to DB
-        cur.execute("""
-            INSERT INTO invoices (invoice_number, transaction_id, dealer_id, dealer_email,
-                                  dealer_name, vehicle, win_price, amount)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-        """, (invoice_number, txn_id, payload.dealer_id, dealer_email,
-              dealer_name, vehicle, float(win_price), payload.dealer_fee))
-        conn.commit()
-
-        # Send email via Resend
-        resend.Emails.send({
-            "from": "PrivaBuy <navin@privabuy.com>",
-            "to": [dealer_email],
-            "bcc": ["navin@privabuy.com"],
-            "subject": f"Invoice {invoice_number} — PrivaBuy Dealer Fee · {vehicle}",
-            "html": html,
-        })
-
-        # Advance transaction status AFTER email succeeds
+        # No Resend email, no invoices-table insert — the real BILL.com
+        # invoice fires later, in create_combined_fee_invoice, once the
+        # seller confirms payment received. This step just confirms the
+        # win and advances the deal flow.
         cur.execute("""
             UPDATE transactions SET status = 'awaiting_bill_of_sale'
             WHERE transaction_id = %s
@@ -196,14 +160,15 @@ async def send_dealer_invoice(txn_id: str, payload: InvoiceRequest):
 
         cur.close()
         return {
-            "invoice_number": invoice_number,
-            "dealer_name":    dealer_name,
-            "dealer_email":   dealer_email,
-            "vehicle":        vehicle,
-            "amount":         payload.dealer_fee,
-            "sent":           True
+            "dealer_name":  dealer_name,
+            "dealer_email": dealer_email,
+            "vehicle":      vehicle,
+            "sent":         False
         }
 
+    except HTTPException:
+        conn.rollback()
+        raise
     except Exception as e:
         conn.rollback()
         raise HTTPException(status_code=500, detail=str(e))
