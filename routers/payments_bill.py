@@ -105,48 +105,34 @@ def generate_invoice_number(conn) -> str:
     cur.close()
     return f"PB-{year}-{str(count).zfill(4)}"
 
-async def create_invoice_for_transaction(transaction_id: str, party_id: str, amount: float, fee_type: str):
-    """
-    party_id is the dealer_id when fee_type == 'dealer_fee', or the seller_id when fee_type == 'seller_fee'.
-    Bills the correct party — this replaces the old create_dealer_invoice, which always billed the dealer.
-    """
-    if fee_type not in FEE_DESCRIPTIONS:
-        raise HTTPException(status_code=400, detail=f"Invalid fee_type: {fee_type}")
+SELLER_FEE = 350
+DEALER_FEE = 450
 
+async def create_combined_fee_invoice(transaction_id: str, dealer_id: str, include_dealer_fee: bool):
+    """
+    Bills the dealer, in a single BILL invoice, for the seller fee and
+    (if applicable) the dealer platform fee. Fires once the seller confirms
+    they've received payment for the car — the title-for-payment handoff —
+    since that's the first point we know the deal is real. The dealer has
+    already withheld the seller fee from what they paid the seller directly.
+    """
     conn = get_connection()
     try:
         cur = conn.cursor()
 
-        if fee_type == "dealer_fee":
-            cur.execute("""
-                SELECT t.amount, t.car_id,
-                       d.dealer_name, d.email
-                FROM transactions t
-                JOIN dealers d ON d.id = t.dealer_id::uuid
-                WHERE t.transaction_id = %s
-            """, (transaction_id,))
-            row = cur.fetchone()
-            if not row:
-                raise HTTPException(status_code=404, detail="Transaction not found")
-            win_price, car_id, party_name, party_email = row
-            party_table = "dealers"
-        else:  # seller_fee
-            cur.execute("""
-                SELECT t.amount, t.car_id,
-                       s.name, s.email
-                FROM transactions t
-                JOIN sellers s ON s.id = t.seller_id::uuid
-                WHERE t.transaction_id = %s
-            """, (transaction_id,))
-            row = cur.fetchone()
-            if not row:
-                raise HTTPException(status_code=404, detail="Transaction not found")
-            win_price, car_id, party_name, party_email = row
-            party_table = "sellers"
-            party_name = party_name or party_email  # sellers.name can be blank
+        cur.execute("""
+            SELECT t.amount, t.car_id, d.dealer_name, d.email
+            FROM transactions t
+            JOIN dealers d ON d.id = t.dealer_id::uuid
+            WHERE t.transaction_id = %s
+        """, (transaction_id,))
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Transaction not found")
+        win_price, car_id, dealer_name, dealer_email = row
 
-        if not party_email:
-            raise HTTPException(status_code=422, detail=f"{party_table[:-1].capitalize()} has no email on file")
+        if not dealer_email:
+            raise HTTPException(status_code=422, detail="Dealer has no email on file")
 
         cur.execute("SELECT year, make, model FROM cars WHERE car_id = %s", (car_id,))
         car_row = cur.fetchone()
@@ -154,26 +140,34 @@ async def create_invoice_for_transaction(transaction_id: str, party_id: str, amo
 
         cur.execute(
             "SELECT invoice_number, pay_url FROM invoices WHERE transaction_id = %s AND fee_type = %s",
-            (transaction_id, fee_type),
+            (transaction_id, "seller_fee"),
         )
         existing = cur.fetchone()
         if existing:
             return {"invoice_number": existing[0], "pay_url": existing[1], "already_sent": True}
 
-        customer_id = await get_or_create_bill_customer(party_table, party_id, party_name, party_email)
-
+        customer_id = await get_or_create_bill_customer("dealers", dealer_id, dealer_name, dealer_email)
         invoice_number = generate_invoice_number(conn)
-        description = f"{FEE_DESCRIPTIONS[fee_type]} — {vehicle}"
+
+        line_items = [{
+            "amount": SELLER_FEE,
+            "description": (
+                f"PrivaBuy Seller Fee — {vehicle} "
+                f"(already withheld from your payment to the seller)"
+            ),
+        }]
+        if include_dealer_fee:
+            line_items.append({
+                "amount": DEALER_FEE,
+                "description": f"PrivaBuy Dealer Platform Fee — {vehicle}",
+            })
 
         bill_invoice = await bill_request("POST", "/invoices", {
             "customerId": customer_id,
             "invoiceNumber": invoice_number,
             "invoiceDate": datetime.now().strftime("%Y-%m-%d"),
             "dueDate": (datetime.now() + timedelta(days=3)).strftime("%Y-%m-%d"),
-            "invoiceLineItems": [{
-                "amount": amount,
-                "description": description,
-            }],
+            "invoiceLineItems": line_items,
             "sendEmail": True,
         })
 
@@ -185,19 +179,29 @@ async def create_invoice_for_transaction(transaction_id: str, party_id: str, amo
                                   dealer_name, vehicle, win_price, amount, bill_invoice_id,
                                   pay_url, status, fee_type)
             VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-        """, (invoice_number, transaction_id, party_id if party_table == "dealers" else None, party_email,
-              party_name, vehicle, float(win_price), amount, bill_invoice_id,
-              pay_url, "sent", fee_type))
-        conn.commit()
+        """, (invoice_number, transaction_id, dealer_id, dealer_email,
+              dealer_name, vehicle, float(win_price), SELLER_FEE, bill_invoice_id,
+              pay_url, "sent", "seller_fee"))
 
+        if include_dealer_fee:
+            cur.execute("""
+                INSERT INTO invoices (invoice_number, transaction_id, dealer_id, dealer_email,
+                                      dealer_name, vehicle, win_price, amount, bill_invoice_id,
+                                      pay_url, status, fee_type)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            """, (invoice_number, transaction_id, dealer_id, dealer_email,
+                  dealer_name, vehicle, float(win_price), DEALER_FEE, bill_invoice_id,
+                  pay_url, "sent", "dealer_fee"))
+
+        conn.commit()
         return {
             "invoice_number": invoice_number,
             "pay_url": pay_url,
             "bill_invoice_id": bill_invoice_id,
-            "party_email": party_email,
-            "fee_type": fee_type,
+            "dealer_email": dealer_email,
+            "seller_fee_amount": SELLER_FEE,
+            "dealer_fee_amount": DEALER_FEE if include_dealer_fee else 0,
         }
-
     except HTTPException:
         conn.rollback()
         raise
@@ -253,21 +257,22 @@ async def bill_webhook(request: Request):
                     "SELECT transaction_id, fee_type FROM invoices WHERE bill_invoice_id = %s",
                     (bill_invoice_id,),
                 )
-                row = cur.fetchone()
-                if row:
-                    transaction_id, fee_type = row
+                rows = cur.fetchall()
+                if rows:
+                    transaction_id = rows[0][0]
+                    fee_types = {r[1] for r in rows}
                     cur.execute("UPDATE invoices SET status = 'paid' WHERE bill_invoice_id = %s", (bill_invoice_id,))
 
-                    if fee_type == "seller_fee":
+                    if "dealer_fee" in fee_types:
+                        cur.execute(
+                            "UPDATE transactions SET dealer_fee_paid = TRUE, dealer_paid_at = %s WHERE transaction_id = %s",
+                            (datetime.utcnow(), transaction_id)
+                        )
+                    if "seller_fee" in fee_types:
                         cur.execute("""
                             UPDATE transactions SET seller_fee_paid = TRUE, seller_paid_at = %s,
                             status = 'completed', completed_at = %s WHERE transaction_id = %s
                         """, (datetime.utcnow(), datetime.utcnow(), transaction_id))
-                    elif fee_type == "dealer_fee":
-                        cur.execute("""
-                            UPDATE transactions SET dealer_fee_paid = TRUE, dealer_paid_at = %s,
-                            status = 'awaiting_bill_of_sale' WHERE transaction_id = %s
-                        """, (datetime.utcnow(), transaction_id))
 
                     conn.commit()
             finally:

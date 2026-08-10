@@ -4,7 +4,7 @@ from typing import Optional
 from datetime import datetime, timedelta
 import uuid
 from database import get_connection
-from routers.payments_bill import create_invoice_for_transaction
+from routers.payments_bill import create_combined_fee_invoice
 
 
 
@@ -81,7 +81,14 @@ def get_transaction_by_car(car_id: str):
     conn = get_connection()
     cur = conn.cursor()
     try:
-        cur.execute("SELECT * FROM transactions WHERE car_id = %s ORDER BY created_at DESC LIMIT 1", (car_id,))
+        cur.execute("""
+            SELECT t.*, c.year, c.make, c.model, c.trim, c.color, c.mileage,
+                   c.loan_status, c.lien_holder, c.lien_payoff_amount, c.accidents
+            FROM transactions t
+            LEFT JOIN cars c ON t.car_id = c.car_id
+            WHERE t.car_id = %s
+            ORDER BY t.created_at DESC LIMIT 1
+        """, (car_id,))
         row = cur.fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="No transaction for this car")
@@ -96,7 +103,14 @@ def get_dealer_transactions(dealer_id: str):
     conn = get_connection()
     cur = conn.cursor()
     try:
-        cur.execute("SELECT * FROM transactions WHERE dealer_id = %s ORDER BY created_at DESC", (dealer_id,))
+        cur.execute("""
+            SELECT t.*, c.year, c.make, c.model, c.trim, c.color, c.mileage,
+                   c.loan_status, c.lien_holder, c.lien_payoff_amount, c.accidents
+            FROM transactions t
+            LEFT JOIN cars c ON t.car_id = c.car_id
+            WHERE t.dealer_id = %s
+            ORDER BY t.created_at DESC
+        """, (dealer_id,))
         rows = cur.fetchall()
         cols = [desc[0] for desc in cur.description]
         return [dict(zip(cols, r)) for r in rows]
@@ -260,26 +274,40 @@ def confirm_pickup(req: PickupConfirmRequest):
         conn.close()
 
 @router.post("/seller/confirm-payment-received")
-def seller_confirm_payment(req: SellerPaymentConfirmRequest):
+async def seller_confirm_payment(req: SellerPaymentConfirmRequest):
     conn = get_connection()
     cur = conn.cursor()
     try:
-        cur.execute("SELECT seller_id FROM transactions WHERE transaction_id = %s", (req.transaction_id,))
+        cur.execute("SELECT seller_id, dealer_id FROM transactions WHERE transaction_id = %s", (req.transaction_id,))
         row = cur.fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Transaction not found")
-        if str(row[0]) != req.seller_id:
+        seller_id, dealer_id = row
+        if str(seller_id) != req.seller_id:
             raise HTTPException(status_code=403, detail="Not authorized")
+
+        cur.execute(
+            "SELECT COUNT(*) FROM transactions WHERE dealer_id = %s AND status = 'completed'",
+            (dealer_id,)
+        )
+        completed_wins = cur.fetchone()[0]
+        dealer_fee_applies = completed_wins >= FREE_WINS
+
         cur.execute("UPDATE transactions SET seller_payment_confirmed=TRUE, seller_payment_confirmed_at=%s, status='awaiting_seller_fee' WHERE transaction_id=%s",
                     (datetime.utcnow(), req.transaction_id))
         conn.commit()
-        return {"status": "awaiting_seller_fee"}
-    except Exception:
+    except HTTPException:
         conn.rollback()
         raise
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
     finally:
         cur.close()
         conn.close()
+
+    invoice = await create_combined_fee_invoice(req.transaction_id, str(dealer_id), dealer_fee_applies)
+    return {"status": "awaiting_seller_fee", **invoice}
 
 
 class InspectionRejectRequest(BaseModel):
@@ -291,6 +319,7 @@ class InspectionRejectRequest(BaseModel):
 
 class InspectionAcceptRequest(BaseModel):
     dealer_id: str
+
 
 @router.post("/{transaction_id}/inspection/accept")
 def inspection_accept(transaction_id: str, req: InspectionAcceptRequest):
@@ -307,11 +336,11 @@ def inspection_accept(transaction_id: str, req: InspectionAcceptRequest):
         if inspection_deadline and datetime.utcnow() > inspection_deadline:
             # Auto-accept if window expired anyway
             pass
-        cur.execute("""UPDATE transactions SET status='awaiting_seller_payment_confirm',
+        cur.execute("""UPDATE transactions SET status='awaiting_title_confirmation',
             inspection_accepted_at=%s WHERE transaction_id=%s""",
             (datetime.utcnow(), transaction_id))
         conn.commit()
-        return {"status": "awaiting_seller_payment_confirm"}
+        return {"status": "awaiting_title_confirmation"}
     except Exception:
         conn.rollback()
         raise
@@ -376,52 +405,62 @@ def resolve_dispute(transaction_id: str, req: DisputeResolveRequest):
         conn.close()
 
 
+class TitleConfirmRequest(BaseModel):
+    dealer_id: str
+    title_photo_url: str
+    payoff_proof_url: Optional[str] = None
+    payoff_amount_paid: Optional[float] = None
 
 
-# ─────────────────────────────────────────────
-#  WILDCARD POST ROUTES
-# ─────────────────────────────────────────────
-
-DEALER_FEE = 450
-FREE_WINS = 5
-
-@router.post("/{transaction_id}/dealer-paid")
-async def mark_dealer_paid(transaction_id: str):
+@router.post("/{transaction_id}/title-confirmed")
+def confirm_title(transaction_id: str, req: TitleConfirmRequest):
     conn = get_connection()
     cur = conn.cursor()
-    dealer_id = None
     try:
-        cur.execute(
-            "SELECT dealer_payment_deadline, dealer_id FROM transactions WHERE transaction_id = %s",
-            (transaction_id,)
-        )
+        cur.execute("""
+            SELECT t.dealer_id, c.loan_status, c.lien_holder, c.lien_payoff_amount
+            FROM transactions t
+            LEFT JOIN cars c ON t.car_id = c.car_id
+            WHERE t.transaction_id = %s
+        """, (transaction_id,))
         row = cur.fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Transaction not found")
-        deadline, dealer_id = row
 
-        if datetime.utcnow() > deadline:
-            cur.execute(
-                "UPDATE transactions SET status='forfeited', forfeited_at=%s WHERE transaction_id=%s",
-                (datetime.utcnow(), transaction_id)
-            )
-            conn.commit()
-            raise HTTPException(status_code=400, detail="24hr deadline expired — bid forfeited")
+        dealer_id, loan_status, lien_holder, disclosed_payoff = row
+        if str(dealer_id) != req.dealer_id:
+            raise HTTPException(status_code=403, detail="Not authorized")
 
-        cur.execute(
-            "SELECT COUNT(*) FROM transactions WHERE dealer_id = %s AND status = 'completed'",
-            (dealer_id,)
-        )
-        completed_wins = cur.fetchone()[0]
+        has_lien = loan_status in ("Loan", "Lease")
 
-        if completed_wins < FREE_WINS:
-            cur.execute(
-                "UPDATE transactions SET dealer_fee_paid=TRUE, dealer_paid_at=%s, status='awaiting_bill_of_sale' WHERE transaction_id=%s",
-                (datetime.utcnow(), transaction_id)
-            )
-            conn.commit()
-            return {"status": "awaiting_bill_of_sale", "fee_charged": False}
+        if has_lien:
+            if not req.payoff_proof_url:
+                raise HTTPException(status_code=400, detail="Lien payoff proof is required before title can be confirmed for this vehicle")
+            if not req.payoff_amount_paid:
+                raise HTTPException(status_code=400, detail="Payoff amount paid is required")
+            if disclosed_payoff and req.payoff_amount_paid < float(disclosed_payoff) * 0.95:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Payoff paid (${req.payoff_amount_paid:,.0f}) is significantly below the disclosed payoff (${float(disclosed_payoff):,.0f}). Contact support before proceeding."
+                )
 
+        cur.execute("""
+            UPDATE transactions
+            SET title_photo_url = %s,
+                lienholder_payoff_proof_url = %s,
+                lienholder_payoff_amount_paid = %s,
+                title_confirmed_at = %s,
+                status = 'awaiting_seller_payment_confirm'
+            WHERE transaction_id = %s
+        """, (
+            req.title_photo_url,
+            req.payoff_proof_url,
+            req.payoff_amount_paid,
+            datetime.utcnow(),
+            transaction_id,
+        ))
+        conn.commit()
+        return {"status": "awaiting_seller_payment_confirm"}
     except HTTPException:
         conn.rollback()
         raise
@@ -432,28 +471,56 @@ async def mark_dealer_paid(transaction_id: str):
         cur.close()
         conn.close()
 
-    invoice = await create_invoice_for_transaction(transaction_id, str(dealer_id), DEALER_FEE, "dealer_fee")
-    return {"status": "awaiting_dealer_payment", "fee_charged": True, **invoice}
+# ─────────────────────────────────────────────
+#  WILDCARD POST ROUTES
+# ─────────────────────────────────────────────
 
+DEALER_FEE = 450
+FREE_WINS = 5
 
-SELLER_FEE = 350
-
-@router.post("/{transaction_id}/seller-paid")
-async def mark_seller_paid(transaction_id: str):
+@router.post("/{transaction_id}/dealer-paid")
+def mark_dealer_paid(transaction_id: str):
     conn = get_connection()
     cur = conn.cursor()
     try:
-        cur.execute("SELECT seller_id FROM transactions WHERE transaction_id = %s", (transaction_id,))
+        cur.execute(
+
+            "SELECT dealer_payment_deadline FROM transactions WHERE transaction_id = %s",
+            (transaction_id,)
+        )
         row = cur.fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Transaction not found")
-        seller_id = row[0]
+        deadline = row[0]
+
+        if datetime.utcnow() > deadline:
+            cur.execute(
+                "UPDATE transactions SET status='forfeited', forfeited_at=%s WHERE transaction_id=%s",
+                (datetime.utcnow(), transaction_id)
+            )
+            conn.commit()
+            raise HTTPException(status_code=400, detail="24hr deadline expired — bid forfeited")
+
+        # Fees are no longer charged here — both are billed together to the
+        # dealer once the seller confirms payment received (title handoff).
+        cur.execute(
+            "UPDATE transactions SET status='awaiting_bill_of_sale' WHERE transaction_id=%s",
+            (transaction_id,)
+        )
+        conn.commit()
+        return {"status": "awaiting_bill_of_sale"}
+    except HTTPException:
+        conn.rollback()
+        raise
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
     finally:
         cur.close()
         conn.close()
 
-    invoice = await create_invoice_for_transaction(transaction_id, str(seller_id), SELLER_FEE, "seller_fee")
-    return {"status": "awaiting_seller_fee_payment", **invoice}
+
+
 
 
 @router.post("/{transaction_id}/forfeit")
@@ -482,7 +549,13 @@ def get_transaction(transaction_id: str):
     conn = get_connection()
     cur = conn.cursor()
     try:
-        cur.execute("SELECT * FROM transactions WHERE transaction_id = %s", (transaction_id,))
+        cur.execute("""
+            SELECT t.*, c.year, c.make, c.model, c.trim, c.color, c.mileage,
+                   c.loan_status, c.lien_holder, c.lien_payoff_amount, c.accidents
+            FROM transactions t
+            LEFT JOIN cars c ON t.car_id = c.car_id
+            WHERE t.transaction_id = %s
+        """, (transaction_id,))
         row = cur.fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Transaction not found")
