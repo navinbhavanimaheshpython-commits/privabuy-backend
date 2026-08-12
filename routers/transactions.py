@@ -40,6 +40,15 @@ class BillOfSaleAckRequest(BaseModel):
     transaction_id: str
     party: str
 
+class ShortfallConfirmRequest(BaseModel):
+    seller_id: str
+
+class PayoffDiscrepancyRequest(BaseModel):
+    dealer_id: str
+    actual_payoff: float
+    notes: Optional[str] = None
+
+
 
 # ─────────────────────────────────────────────
 #  INTERNAL HELPER
@@ -410,6 +419,7 @@ class TitleConfirmRequest(BaseModel):
     title_photo_url: str
     payoff_proof_url: Optional[str] = None
     payoff_amount_paid: Optional[float] = None
+    lienholder_verified_at: Optional[str] = None
 
 
 @router.post("/{transaction_id}/title-confirmed")
@@ -418,7 +428,8 @@ def confirm_title(transaction_id: str, req: TitleConfirmRequest):
     cur = conn.cursor()
     try:
         cur.execute("""
-            SELECT t.dealer_id, c.loan_status, c.lien_holder, c.lien_payoff_amount
+            SELECT t.dealer_id, t.amount, t.shortfall_paid_confirmed,
+                   c.loan_status, c.lien_holder, c.lien_payoff_amount
             FROM transactions t
             LEFT JOIN cars c ON t.car_id = c.car_id
             WHERE t.transaction_id = %s
@@ -427,7 +438,7 @@ def confirm_title(transaction_id: str, req: TitleConfirmRequest):
         if not row:
             raise HTTPException(status_code=404, detail="Transaction not found")
 
-        dealer_id, loan_status, lien_holder, disclosed_payoff = row
+        dealer_id, bid_amount, shortfall_paid_confirmed, loan_status, lien_holder, disclosed_payoff = row
         if str(dealer_id) != req.dealer_id:
             raise HTTPException(status_code=403, detail="Not authorized")
 
@@ -443,12 +454,23 @@ def confirm_title(transaction_id: str, req: TitleConfirmRequest):
                     status_code=400,
                     detail=f"Payoff paid (${req.payoff_amount_paid:,.0f}) is significantly below the disclosed payoff (${float(disclosed_payoff):,.0f}). Contact support before proceeding."
                 )
+            if not req.lienholder_verified_at:
+                raise HTTPException(status_code=400, detail="Lienholder verification is required before title can be confirmed")
+
+            payoff_amt = float(disclosed_payoff) if disclosed_payoff else 0
+            shortfall = max(0, (payoff_amt + SELLER_FEE) - float(bid_amount))
+            if shortfall > 0 and not shortfall_paid_confirmed:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Seller has an outstanding shortfall of ${shortfall:,.0f} that must be confirmed paid before title transfer can complete"
+                )
 
         cur.execute("""
             UPDATE transactions
             SET title_photo_url = %s,
                 lienholder_payoff_proof_url = %s,
                 lienholder_payoff_amount_paid = %s,
+                lienholder_verified_at = %s,
                 title_confirmed_at = %s,
                 status = 'awaiting_seller_payment_confirm'
             WHERE transaction_id = %s
@@ -456,6 +478,7 @@ def confirm_title(transaction_id: str, req: TitleConfirmRequest):
             req.title_photo_url,
             req.payoff_proof_url,
             req.payoff_amount_paid,
+            req.lienholder_verified_at,
             datetime.utcnow(),
             transaction_id,
         ))
@@ -538,6 +561,97 @@ def forfeit_transaction(transaction_id: str):
         cur.close()
         conn.close()
 
+
+
+@router.post("/{transaction_id}/shortfall-confirmed")
+def confirm_shortfall_paid(transaction_id: str, req: ShortfallConfirmRequest):
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT seller_id FROM transactions WHERE transaction_id = %s", (transaction_id,))
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Transaction not found")
+        if str(row[0]) != req.seller_id:
+            raise HTTPException(status_code=403, detail="Not authorized")
+        cur.execute("""
+            UPDATE transactions
+            SET shortfall_paid_confirmed = TRUE, shortfall_confirmed_at = %s
+            WHERE transaction_id = %s
+        """, (datetime.utcnow(), transaction_id))
+        conn.commit()
+        return {"status": "shortfall_confirmed"}
+    except HTTPException:
+        conn.rollback()
+        raise
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cur.close()
+        conn.close()
+
+
+@router.post("/{transaction_id}/payoff-discrepancy")
+def flag_payoff_discrepancy(transaction_id: str, req: PayoffDiscrepancyRequest):
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT dealer_id, status FROM transactions WHERE transaction_id = %s", (transaction_id,))
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Transaction not found")
+        dealer_id, current_status = row
+        if str(dealer_id) != req.dealer_id:
+            raise HTTPException(status_code=403, detail="Not authorized")
+        cur.execute("""
+            UPDATE transactions
+            SET status = 'payoff_discrepancy_flagged',
+                pre_discrepancy_status = %s,
+                payoff_discrepancy_actual_amount = %s,
+                payoff_discrepancy_notes = %s,
+                payoff_discrepancy_flagged_at = %s
+            WHERE transaction_id = %s
+        """, (current_status, req.actual_payoff, req.notes, datetime.utcnow(), transaction_id))
+        conn.commit()
+        return {"status": "payoff_discrepancy_flagged"}
+    except HTTPException:
+        conn.rollback()
+        raise
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cur.close()
+        conn.close()
+
+
+@router.post("/{transaction_id}/request-fresh-payoff")
+def request_fresh_payoff(transaction_id: str):
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT transaction_id FROM transactions WHERE transaction_id = %s", (transaction_id,))
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Transaction not found")
+        cur.execute("""
+            UPDATE transactions
+            SET fresh_payoff_requested_at = %s
+            WHERE transaction_id = %s
+        """, (datetime.utcnow(), transaction_id))
+        conn.commit()
+        # TODO: wire this to Resend to actually email the seller a re-confirm link
+        return {"status": "fresh_payoff_requested"}
+    except HTTPException:
+        conn.rollback()
+        raise
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cur.close()
+        conn.close()
 
 
 # ─────────────────────────────────────────────
