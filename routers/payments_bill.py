@@ -164,8 +164,12 @@ async def create_combined_fee_invoice(transaction_id: str, dealer_id: str, inclu
                 "description": f"PrivaBuy Dealer Platform Fee — {vehicle}",
             })
 
+        customer_id = await get_or_create_bill_customer("dealers", dealer_id, dealer_name, dealer_email)
+        print(f"DEBUG: customer_id = {customer_id!r}")  # temporary
+        invoice_number = generate_invoice_number(conn)
+        
         bill_invoice = await bill_request("POST", "/invoices", {
-            "customerId": {"id": customer_id},
+            "customerId": customer_id,
             "invoiceNumber": invoice_number,
             "invoiceDate": datetime.now().strftime("%Y-%m-%d"),
             "dueDate": (datetime.now() + timedelta(days=3)).strftime("%Y-%m-%d"),
