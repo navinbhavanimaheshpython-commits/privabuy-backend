@@ -658,6 +658,22 @@ def request_fresh_payoff(transaction_id: str):
 #  WILDCARD GET — must be absolute last
 # ─────────────────────────────────────────────
 
+@router.get("/invoices/transaction/{transaction_id}")
+def get_invoices_for_transaction(transaction_id: str):
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT invoice_number, fee_type, amount, status, pay_url
+            FROM invoices WHERE transaction_id = %s
+        """, (transaction_id,))
+        rows = cur.fetchall()
+        cols = [d[0] for d in cur.description]
+        return [dict(zip(cols, r)) for r in rows]
+    finally:
+        cur.close()
+        conn.close()
+
 @router.get("/{transaction_id}")
 def get_transaction(transaction_id: str):
     conn = get_connection()
