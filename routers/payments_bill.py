@@ -151,6 +151,7 @@ async def create_combined_fee_invoice(transaction_id: str, dealer_id: str, inclu
 
         line_items = [{
             "amount": SELLER_FEE,
+            "quantity": 1,
             "description": (
                 f"PrivaBuy Seller Fee — {vehicle} "
                 f"(already withheld from your payment to the seller)"
@@ -159,11 +160,12 @@ async def create_combined_fee_invoice(transaction_id: str, dealer_id: str, inclu
         if include_dealer_fee:
             line_items.append({
                 "amount": DEALER_FEE,
+                "quantity": 1,
                 "description": f"PrivaBuy Dealer Platform Fee — {vehicle}",
             })
 
         bill_invoice = await bill_request("POST", "/invoices", {
-            "customerId": customer_id,
+            "customerId": {"id": customer_id},
             "invoiceNumber": invoice_number,
             "invoiceDate": datetime.now().strftime("%Y-%m-%d"),
             "dueDate": (datetime.now() + timedelta(days=3)).strftime("%Y-%m-%d"),
