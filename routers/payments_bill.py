@@ -169,12 +169,12 @@ async def create_combined_fee_invoice(transaction_id: str, dealer_id: str, inclu
         invoice_number = generate_invoice_number(conn)
 
         bill_invoice = await bill_request("POST", "/invoices", {
-            "customerId": customer_id,
+            "customer": {"id": customer_id},
             "invoiceNumber": invoice_number,
             "invoiceDate": datetime.now().strftime("%Y-%m-%d"),
             "dueDate": (datetime.now() + timedelta(days=3)).strftime("%Y-%m-%d"),
-            "invoiceLineItems": line_items,
-            "sendEmail": True,
+            "invoiceLineItems": line_items,  # verify "price" vs "amount" key first
+            "processingOptions": {"sendEmail": True},
         })
 
         pay_url = bill_invoice.get("payUrl") or bill_invoice.get("payLink", "")
