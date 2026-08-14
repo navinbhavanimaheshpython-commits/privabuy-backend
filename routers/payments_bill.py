@@ -87,9 +87,12 @@ async def get_or_create_bill_customer(party_table: str, party_id: str, party_nam
             "name": party_name,
             "email": party_email,
         })
+        print(f"DEBUG: full customer creation response = {result!r}")  # temporary
         customer_id = result["id"]
 
+        print(f"DEBUG: caching bill_customer_id={customer_id!r} for {party_table}.id={party_id!r}")  # temporary
         cur.execute(f"UPDATE {party_table} SET bill_customer_id = %s WHERE id = %s", (customer_id, party_id))
+        print(f"DEBUG: rows updated = {cur.rowcount}")  # temporary
         conn.commit()
         return customer_id
     finally:
@@ -146,9 +149,6 @@ async def create_combined_fee_invoice(transaction_id: str, dealer_id: str, inclu
         if existing:
             return {"invoice_number": existing[0], "pay_url": existing[1], "already_sent": True}
 
-        customer_id = await get_or_create_bill_customer("dealers", dealer_id, dealer_name, dealer_email)
-        invoice_number = generate_invoice_number(conn)
-
         line_items = [{
             "amount": SELLER_FEE,
             "quantity": 1,
@@ -167,7 +167,7 @@ async def create_combined_fee_invoice(transaction_id: str, dealer_id: str, inclu
         customer_id = await get_or_create_bill_customer("dealers", dealer_id, dealer_name, dealer_email)
         print(f"DEBUG: customer_id = {customer_id!r}")  # temporary
         invoice_number = generate_invoice_number(conn)
-        
+
         bill_invoice = await bill_request("POST", "/invoices", {
             "customerId": customer_id,
             "invoiceNumber": invoice_number,
