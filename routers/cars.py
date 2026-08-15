@@ -73,7 +73,7 @@ async def list_car(data: CarListing):
             data.lien_holder, data.lien_payoff_amount, data.lien_payoff_url
         ))
 
-        cur.execute("SELECT id FROM dealers ORDER BY created_at ASC LIMIT 5")
+        cur.execute("SELECT id, dealer_name, email FROM dealers WHERE status = 'approved'")
         dealers = cur.fetchall()
         for d in dealers:
             dealer_id = d[0]
