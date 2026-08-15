@@ -174,7 +174,7 @@ async def create_combined_fee_invoice(transaction_id: str, dealer_id: str, inclu
             "invoiceDate": datetime.now().strftime("%Y-%m-%d"),
             "dueDate": (datetime.now() + timedelta(days=3)).strftime("%Y-%m-%d"),
             "invoiceLineItems": line_items,
-            "processingOptions": {"sendEmail": False},  # TEMP: BDC_5217 — no bank account on BILL org yet. Flip to True after adding one.
+            "processingOptions": {"sendEmail": True},
         })
 
         pay_url = bill_invoice.get("payUrl") or bill_invoice.get("payLink", "")
@@ -217,7 +217,7 @@ async def create_combined_fee_invoice(transaction_id: str, dealer_id: str, inclu
     finally:
         conn.close()
 
-        
+
 def verify_bill_signature(raw_body: bytes, signature_header: str) -> bool:
     if not signature_header:
         return False
